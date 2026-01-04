@@ -75,8 +75,8 @@
       gap:12px;
       flex: 1 1 auto;
       min-height: 0; /* allow children to size within viewport */
-      flex-wrap: wrap;
-      align-content: flex-start;
+      flex-wrap: nowrap; /* keep both panels visible side-by-side by default */
+      align-items: stretch;
     }
     .panel {
       background: rgba(17,24,39, .62);
@@ -147,8 +147,25 @@
       .btn.big{ min-height: clamp(72px, 16vh, 120px); padding: clamp(12px, 3.2vh, 26px) 14px; }
     }
 
-    /* when layout wraps to two rows on narrow screens, cap the right panel height */
-    @media (max-width: 820px){
+    /* very short screens (common on phones in landscape): compress header + buttons */
+    @media (max-height: 520px){
+      [data-i18n="subtitle"]{ display:none; }
+      .toolbar .btn{ padding:8px 10px; border-radius:12px; font-size:12px; }
+      .langSelect{ padding:6px 8px; border-radius:10px; font-size:12px; }
+      .panel{ padding: 10px; }
+      .actionGrid{ gap: 8px; }
+      .btn.big{ min-height: 64px; padding: 10px 12px; font-size: clamp(18px, 3.4vw, 32px); border-radius:20px; }
+      .panel.left{ overflow:auto; } /* if still tight, allow internal scroll (no page cut) */
+    }
+
+    /* when screen is narrow AND portrait, stack panels (landscape keeps side-by-side) */
+    @media (max-width: 820px) and (orientation: portrait){
+      .row{ flex-wrap: wrap; }
+      .right{ max-width:none; flex: 1 1 100%; }
+      .left{ flex: 1 1 100%; }
+      .panel.right{ max-height: min(34vh, 260px); }
+    }
+
       .right{ max-width:none; flex: 1 1 100%; }
       .left{ flex: 1 1 100%; }
       .panel.right{ max-height: min(34vh, 260px); }
