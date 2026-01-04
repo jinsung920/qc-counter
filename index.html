@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>QC Counter (CHOI)</title>
+
+  <!-- PWA install support -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0b1020">
+
+  <style>
+    :root {
+      --bg:#0f172a; --panel:#0b1220; --card:#101827; --line:#1f2937;
+      --text:#e5e7eb; --muted:#94a3b8; --ok:#22c55e; --ng:#ef4444;
+      --accent:#3b82f6; --warn:#f59e0b;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin:0; background: linear-gradient(180deg,#0b1020,#0a0f1b); color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Helvetica, Arial, sans-serif;
+    }
+
+    /* Splash */
+    .splash {
+      position: fixed; inset: 0;
+      display:flex; align-items:center; justify-content:center;
+      background: radial-gradient(1100px 700px at 50% 10%, rgba(59,130,246,.18), transparent 55%),
+                  linear-gradient(180deg,#0b1020,#0a0f1b);
+      z-index: 9999;
+      transition: opacity 320ms ease, transform 320ms ease;
+    }
+    .splash.hide { opacity: 0; transform: translateY(-6px); pointer-events:none; }
+    $1    .splashLogo {
+      width: min(320px, 70vw);
+      height: auto;
+      display: block;
+      margin: 0 auto 14px auto;
+    }
+    .splashTitle { font-size: clamp(26px, 4.2vw, 42px); font-weight: 1000; letter-spacing: .2px; margin: 0 0 10px 0; }
+    .splashMade { font-size: clamp(18px, 3vw, 26px); font-weight: 900; color:#cbd5e1; margin: 0; }
+
+    /* widen overall so left buttons can be BIG */
+    .container { max-width: 1320px; margin: 0 auto; padding: 16px; }
+
+    header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .title { font-size: 18px; font-weight: 900; letter-spacing:.2px; }
+    .muted { color: var(--muted); }
+
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .langSelect { background:#0a1325; border:1px solid #1f2937; color:var(--text); padding:8px 10px; border-radius:10px; font-size:13px; font-weight:700 }
+
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .panel {
+      background: rgba(17,24,39, .62);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:16px;
+      box-shadow: 0 10px 34px rgba(0,0,0,.35);
+    }
+
+    /* give left much more room; keep right narrow */
+    .left { flex: 3.3 1 520px; }
+    .right { flex: 0.45 1 220px; max-width: 260px; }
+
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      cursor:pointer; user-select:none; touch-action:manipulation;
+      border:1px solid #273244; background:#0c162b; color:var(--text);
+      padding:12px 14px; border-radius:16px; font-weight:900;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn.ok { background: rgba(34,197,94,.18); border-color:#1e8a55; }
+    .btn.ng { background: rgba(239,68,68,.18); border-color:#a23232; }
+    .btn.primary { background: linear-gradient(180deg,#2a4fa0,#1f3d7a); border-color:#335fc1; }
+    .btn.warn { background: rgba(245,158,11,.16); border-color:#9a6a17; }
+
+    /* BIG action buttons for shopfloor (use left space aggressively) */
+    .actionGrid {
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 10px;
+    }
+
+    .btn.big {
+      width:100%;
+      min-height: 160px;                 /* big tap target */
+      padding: 40px 22px;                /* big padding */
+      font-size: clamp(30px, 3.8vw, 54px);
+      border-radius: 24px;
+      letter-spacing: .35px;
+      line-height: 1.05;
+    }
+
+    /* keep buttons BIG even on tablets; stack only on very small screens */
+    @media (max-width: 560px){
+      .actionGrid{ grid-template-columns: 1fr; }
+      .right{ max-width:none; }
+      .btn.big{ min-height: 120px; font-size: clamp(24px, 6vw, 38px); padding: 30px 18px; }
+    }
+
+    .stateRow { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    .stateBadge {
+      display:inline-flex; align-items:center; gap:6px;
+      border:1px dashed #42516b; background:#0a1325;
+      padding:10px 12px; border-radius:999px; font-weight:900;
+      font-size: 14px;
+    }
+    .state-ok { color: var(--ok); }
+    .state-ng { color: var(--ng); }
+    .state-none { color: var(--muted); }
+
+    .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Consolas, Menlo, monospace; background:#0b1220; border:1px solid var(--line); padding:2px 6px; border-radius:6px; }
+
+    /* compact tables on right */
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; font-size:12.5px; }
+    thead th { position: sticky; top:0; background:#0d1424; font-size:12px; }
+
+    .stat { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin: 6px 0 10px 0; }
+    .chip { border:1px solid #334155; border-radius:999px; padding:6px 8px; color:#cbd5e1; background:#0a1325; font-size:12px; }
+    .okT { color:var(--ok); }
+    .ngT { color:var(--ng); }
+
+    /* Dialog */
+    dialog {
+      border:none; border-radius:18px; padding:0;
+      width:min(520px, 92vw);
+      background:#0a1325; color:var(--text);
+      box-shadow: 0 18px 60px rgba(0,0,0,.55);
+    }
+    .dlgWrap { padding:16px; border:1px solid var(--line); border-radius:18px; }
+    .dlgTitle { font-size:16px; font-weight:900; margin:0 0 8px 0; }
+    .dlgMsg { margin:0 0 14px 0; color:#cbd5e1; }
+    .dlgBtns { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+
+    .fieldLabel { font-size:12px; color:#9fb0c8; font-weight:800; margin: 10px 0 6px 0; }
+    input[type="password"]{
+      width:100%;
+      background:#0a1325;
+      border:1px solid #1f2937;
+      color:var(--text);
+      padding:12px;
+      border-radius:12px;
+      font-size:16px;
+      font-weight:800;
+      outline:none;
+    }
+    input[type="password"]:focus{border-color:#334155; box-shadow:0 0 0 2px rgba(59,130,246,.25)}
+  </style>
+</head>
+<body>
+  <!-- Splash: logo 1.5s → Made by CHOI 1.5s (total 3s) on app start -->
+  <div class="splash" id="splash" aria-hidden="true">
+    <div class="splashCard">
+      <!-- Place your company logo file as ./logo.png in the same folder -->
+      <img id="splashLogo" src="./logo.png" alt="Company Logo" class="splashLogo" />
+
+      <!-- Text phase (hidden first, shown after 1.5s) -->
+      <div id="splashTextWrap" style="display:none">
+        <h1 class="splashTitle">QC Counter (CHOI)</h1>
+        <p class="splashMade">Made by CHOI</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <header>
+      <div>
+        <div class="title" data-i18n="title">QC Counter (CHOI)</div>
+        <div class="muted" data-i18n="subtitle">판정 선택 후 Check를 누르면 1건이 기록됩니다. (오른쪽은 시간대별 누계)</div>
+      </div>
+      <div class="toolbar">
+        <label class="muted" style="display:flex; align-items:center; gap:8px">
+          <span data-i18n="langLabel">언어</span>
+          <select id="lang" class="langSelect">
+            <option value="ko">한국어</option>
+            <option value="vi">Tiếng Việt</option>
+          </select>
+        </label>
+        <button class="btn" id="btnExport" data-i18n="export">CSV 내보내기</button>
+        <button class="btn warn" id="btnClear" data-i18n="clear">오늘 데이터 삭제</button>
+      </div>
+    </header>
+
+    <div class="row">
+      <section class="panel left">
+        <h3 style="margin:0 0 8px 0" data-i18n="panelLeft">판정 + 저장</h3>
+
+        <div class="actionGrid">
+          <button class="btn ok big" id="btnOK" data-i18n="btnOK">OK</button>
+          <button class="btn ng big" id="btnNG" data-i18n="btnNG">NG</button>
+          <button class="btn primary big" id="btnCheck" data-i18n="btnCheck">Check (저장)</button>
+          <button class="btn warn big" id="btnCancel" data-i18n="btnCancel">취소 (Undo)</button>
+        </div>
+
+        <div class="stateRow">
+          <div>
+            <div class="hint" data-i18n="hint">절차: 판정 선택(OK/NG) → <span class="kbd">Check</span> → (필요 시 Undo)</div>
+            <div class="hint" data-i18n="privacyHint">※ 현장 화면에는 시간별 상세 기록을 표시하지 않습니다. (관리자는 내보내기 파일에서 확인)</div>
+          </div>
+          <div class="stateBadge" id="currentState"><span class="state-none" data-i18n="stateNone">미선택</span></div>
+        </div>
+      </section>
+
+      <aside class="panel right">
+        <h3 style="margin:0 0 8px 0" data-i18n="panelRight">시간대별 누계</h3>
+        <div class="stat">
+          <span class="chip"><span data-i18n="sumToday">오늘 누계</span>: <b id="sumTotal">0</b></span>
+          <span class="chip okT">OK: <b id="sumOK">0</b></span>
+          <span class="chip ngT">NG: <b id="sumNG">0</b></span>
+        </div>
+        <div style="max-height: 520px; overflow:auto; border:1px solid var(--line); border-radius:12px">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:58px" data-i18n="thHour">시간</th>
+                <th style="width:44px" data-i18n="thQty">수량</th>
+                <th style="width:36px">OK</th>
+                <th style="width:36px">NG</th>
+              </tr>
+            </thead>
+            <tbody id="hourTbody"></tbody>
+          </table>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Cancel confirmation dialog (Undo) -->
+  <dialog id="dlgCancel">
+    <div class="dlgWrap">
+      <div class="dlgTitle" data-i18n="cancelTitle">취소 확인</div>
+      <p class="dlgMsg" data-i18n="cancelMsg">정말 취소하겠습니다?</p>
+      <div class="dlgBtns">
+        <button class="btn" id="btnNo" data-i18n="no">아니오</button>
+        <button class="btn warn" id="btnYes" data-i18n="yes">네</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Clear today dialog (Password) -->
+  <dialog id="dlgClear">
+    <div class="dlgWrap">
+      <div class="dlgTitle" data-i18n="clearTitle">오늘 데이터 삭제</div>
+      <p class="dlgMsg" data-i18n="clearMsg">삭제하려면 비밀번호를 입력하세요.</p>
+      <div class="fieldLabel" data-i18n="pwdLabel">비밀번호</div>
+      <input type="password" id="pwd" inputmode="numeric" autocomplete="off" placeholder="1234" />
+      <div class="dlgBtns" style="margin-top:14px">
+        <button class="btn" id="btnClearNo" data-i18n="cancel">취소</button>
+        <button class="btn warn" id="btnClearYes" data-i18n="confirm">확인</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    // Splash control: logo 1.5s → text 1.5s (works even in some limited viewers)
+    (function(){
+      const splash = document.getElementById('splash');
+      if(!splash) return;
+
+      const logo = document.getElementById('splashLogo');
+      const textWrap = document.getElementById('splashTextWrap');
+      let done = false;
+
+      function hideSplash(){
+        if(done) return;
+        done = true;
+        splash.classList.add('hide');
+        setTimeout(() => { try { splash.remove(); } catch(_) {} }, 420);
+      }
+
+      // Phase 1: show logo only (0~1.5s)
+      // Phase 2: show "Made by CHOI" text only (1.5~3.0s)
+      setTimeout(() => {
+        try {
+          if(logo) logo.style.display = 'none';
+          if(textWrap) textWrap.style.display = 'block';
+        } catch(_) {}
+      }, 1500);
+
+      // Total splash duration: 3 seconds
+      setTimeout(hideSplash, 3000);
+
+      // Safety fallback: keep this event so JS runs in some WebView cases
+      window.addEventListener('pageshow', () => {
+        // no-op
+      });
+    })();
+
+    const I18N = {
+      ko: {
+        title: 'QC Counter (CHOI)',
+        subtitle: '판정 선택 후 Check를 누르면 1건이 기록됩니다. (오른쪽은 시간대별 누계)',
+        langLabel: '언어',
+        export: 'CSV 내보내기',
+        clear: '오늘 데이터 삭제',
+        panelLeft: '판정 + 저장',
+        panelRight: '시간대별 누계',
+        btnOK: 'OK',
+        btnNG: 'NG',
+        btnCheck: 'Check (저장)',
+        btnCancel: '취소 (Undo)',
+        stateNone: '미선택',
+        hint: '절차: 판정 선택(OK/NG) → <span class="kbd">Check</span> → (필요 시 Undo)',
+        privacyHint: '※ 현장 화면에는 시간별 상세 기록을 표시하지 않습니다. (관리자는 내보내기 파일에서 확인)',
+        sumToday: '오늘 누계',
+        thHour: '시간', thQty: '수량',
+        alertSelect: '먼저 OK 또는 NG를 선택하세요.',
+        alertNoData: '오늘 데이터가 없습니다.',
+        alertNoUndo: '취소할 마지막 Check 기록이 없습니다.',
+        cancelTitle: '취소 확인',
+        cancelMsg: '정말 취소하겠습니다? (방금 Check 한 1건만 삭제됩니다)',
+        yes: '네',
+        no: '아니오',
+        clearTitle: '오늘 데이터 삭제',
+        clearMsg: '삭제하려면 비밀번호를 입력하세요.',
+        pwdLabel: '비밀번호',
+        pwdWrong: '비밀번호가 틀렸습니다.',
+        cancel: '취소',
+        confirm: '확인',
+        exportedMsg: '내보내기 완료: 파일이 다운로드(Downloads) 폴더에 저장됩니다.'
+      },
+      vi: {
+        title: 'QC Counter (CHOI)',
+        subtitle: 'Chọn OK/NG rồi nhấn Check để lưu 1 sản phẩm. (Bên phải: cộng dồn theo giờ)',
+        langLabel: 'Ngôn ngữ',
+        export: 'Xuất CSV',
+        clear: 'Xoá dữ liệu hôm nay',
+        panelLeft: 'Phán định + Lưu',
+        panelRight: 'Cộng dồn theo giờ',
+        btnOK: 'OK',
+        btnNG: 'NG',
+        btnCheck: 'Check (Lưu)',
+        btnCancel: 'Huỷ (Undo)',
+        stateNone: 'Chưa chọn',
+        hint: 'Quy trình: Chọn OK/NG → <span class="kbd">Check</span> → (cần thì Undo)',
+        privacyHint: '※ Màn hình không hiển thị chi tiết theo thời gian. (Quản lý xem trong file xuất)',
+        sumToday: 'Tổng hôm nay',
+        thHour: 'Giờ', thQty: 'SL',
+        alertSelect: 'Hãy chọn OK hoặc NG trước.',
+        alertNoData: 'Chưa có dữ liệu hôm nay.',
+        alertNoUndo: 'Không có bản ghi Check gần nhất để huỷ.',
+        cancelTitle: 'Xác nhận huỷ',
+        cancelMsg: 'Bạn có chắc muốn huỷ không? (Chỉ xoá 1 bản ghi vừa Check)',
+        yes: 'Có',
+        no: 'Không',
+        clearTitle: 'Xoá dữ liệu hôm nay',
+        clearMsg: 'Nhập mật khẩu để xoá.',
+        pwdLabel: 'Mật khẩu',
+        pwdWrong: 'Sai mật khẩu.',
+        cancel: 'Hủy',
+        confirm: 'Xác nhận',
+        exportedMsg: 'Xuất xong: file được lưu trong thư mục Tải xuống (Downloads).'
+      }
+    };
+
+    const store = {
+      get: (k,v)=>{ try { return JSON.parse(localStorage.getItem(k)) ?? v } catch { return v } },
+      set: (k,v)=> localStorage.setItem(k, JSON.stringify(v)),
+    };
+    const todayKey = ()=> 'qccounter_' + new Date().toISOString().slice(0,10);
+
+    let selected = null;
+    let lang = store.get('qccounter_lang','ko');
+    let lastSavedId = store.get('qccounter_lastSavedId', null);
+
+    const btnOK = document.getElementById('btnOK');
+    const btnNG = document.getElementById('btnNG');
+    const btnCheck = document.getElementById('btnCheck');
+    const btnCancel = document.getElementById('btnCancel');
+    const currentState = document.getElementById('currentState');
+    const hourTbody = document.getElementById('hourTbody');
+    const sumTotalEl = document.getElementById('sumTotal');
+    const sumOKEl = document.getElementById('sumOK');
+    const sumNGEl = document.getElementById('sumNG');
+
+    const btnExport = document.getElementById('btnExport');
+    const btnClear = document.getElementById('btnClear');
+    const langSel = document.getElementById('lang');
+
+    const dlgCancel = document.getElementById('dlgCancel');
+    const btnYes = document.getElementById('btnYes');
+    const btnNo = document.getElementById('btnNo');
+
+    const dlgClear = document.getElementById('dlgClear');
+    const btnClearYes = document.getElementById('btnClearYes');
+    const btnClearNo = document.getElementById('btnClearNo');
+    const pwdEl = document.getElementById('pwd');
+
+    function applyLang(){
+      const d = I18N[lang] || I18N.ko;
+      document.querySelectorAll('[data-i18n]').forEach(el=>{
+        const key = el.getAttribute('data-i18n');
+        if(!key) return;
+        if(d[key] !== undefined){
+          if(key==='hint') el.innerHTML = d[key];
+          else el.textContent = d[key];
+        }
+      });
+      if(!selected){ currentState.innerHTML = `<span class="state-none">${d.stateNone}</span>`; }
+    }
+
+    langSel.value = lang;
+    langSel.addEventListener('change', ()=>{
+      lang = langSel.value;
+      store.set('qccounter_lang', lang);
+      applyLang();
+      renderAll();
+    });
+
+    btnOK.onclick = ()=> setSelected('OK');
+    btnNG.onclick = ()=> setSelected('NG');
+
+    function setSelected(v){
+      selected = v;
+      currentState.innerHTML = v === 'OK'
+        ? '<span class="state-ok">OK</span>'
+        : '<span class="state-ng">NG</span>';
+    }
+
+    function getRows(){ return store.get(todayKey(), []); }
+    function setRows(rows){ store.set(todayKey(), rows); }
+
+    function saveRecord(final){
+      const now = new Date();
+      const date = now.toISOString().slice(0,10);
+      const time = now.toTimeString().slice(0,8);
+      const id = `${date}T${time}.${now.getMilliseconds()}_${Math.random().toString(16).slice(2,8)}`;
+      const row = { id, date, time, final };
+      const rows = getRows();
+      rows.push(row);
+      setRows(rows);
+      lastSavedId = id;
+      store.set('qccounter_lastSavedId', lastSavedId);
+    }
+
+    btnCheck.onclick = ()=>{
+      const d = I18N[lang] || I18N.ko;
+      if(!selected){ alert(d.alertSelect); return; }
+      saveRecord(selected);
+      selected = null;
+      currentState.innerHTML = `<span class="state-none">${d.stateNone}</span>`;
+      renderAll();
+    };
+
+    btnCancel.onclick = ()=>{
+      const d = I18N[lang] || I18N.ko;
+      const rows = getRows();
+      if(!rows.length || !lastSavedId){ alert(d.alertNoUndo); return; }
+      dlgCancel.showModal();
+    };
+    btnNo.onclick = ()=> dlgCancel.close();
+    btnYes.onclick = ()=>{
+      const rows = getRows();
+      const idx = rows.findIndex(r => r.id === lastSavedId);
+      if(idx >= 0){
+        rows.splice(idx, 1);
+        setRows(rows);
+      }
+      lastSavedId = rows.length ? rows[rows.length - 1].id : null;
+      store.set('qccounter_lastSavedId', lastSavedId);
+      dlgCancel.close();
+      renderAll();
+    };
+
+    function renderAll(){ renderHourStats(); }
+
+    function buildHourAgg(rows){
+      const hours = Array.from({length:24}, (_,i)=>({h:i, total:0, ok:0, ng:0}));
+      let sumT=0, sumO=0, sumN=0;
+      for(const r of rows){
+        const h = parseInt(r.time.slice(0,2),10);
+        const obj = hours[h];
+        obj.total += 1; sumT += 1;
+        if(r.final==='OK'){ obj.ok+=1; sumO+=1; } else { obj.ng+=1; sumN+=1; }
+      }
+      return {hours, sumT, sumO, sumN};
+    }
+
+    function renderHourStats(){
+      const rows = getRows();
+      const {hours, sumT, sumO, sumN} = buildHourAgg(rows);
+      sumTotalEl.textContent = sumT; sumOKEl.textContent = sumO; sumNGEl.textContent = sumN;
+      hourTbody.innerHTML = '';
+      const nowH = new Date().getHours();
+      for(const obj of hours){
+        const hh = obj.h.toString().padStart(2,'0');
+        const tr = document.createElement('tr');
+        const bold = obj.h===nowH ? 'font-weight:900' : '';
+        tr.innerHTML = `<td style="${bold}">${hh}:00</td><td>${obj.total}</td><td class="okT">${obj.ok}</td><td class="ngT">${obj.ng}</td>`;
+        hourTbody.appendChild(tr);
+      }
+    }
+
+    // Export (Excel HTML) with Summary + Detail
+    btnExport.onclick = ()=>{
+      const d = I18N[lang] || I18N.ko;
+      const rows = getRows();
+      if(rows.length===0){ alert(d.alertNoData); return; }
+      const date = rows[0].date;
+      const {hours, sumT, sumO, sumN} = buildHourAgg(rows);
+
+      const summaryRows = [
+        ['Date', date],
+        ['Total', String(sumT)],
+        ['OK', String(sumO)],
+        ['NG', String(sumN)],
+        [],
+        ['Hour', 'Qty', 'OK', 'NG'],
+        ...hours.map(h=>[`${String(h.h).padStart(2,'0')}:00`, String(h.total), String(h.ok), String(h.ng)])
+      ];
+
+      const detailRows = [
+        ['date','time','final'],
+        ...rows.map(r=>[r.date, r.time, r.final])
+      ];
+
+      const xlsHtml = buildExcelHtml([
+        { name: 'Summary', rows: summaryRows },
+        { name: 'Detail', rows: detailRows }
+      ]);
+
+      const blob = new Blob([xlsHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      downloadBlob(blob, `QCCount_${date}.xls`);
+      alert(d.exportedMsg);
+    };
+
+    function esc(s){
+      return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+    }
+    function tableHtml(rows){
+      let out = '<table border="1" cellspacing="0" cellpadding="3">';
+      for(const r of rows){
+        if(r.length===0){ out += '<tr><td></td></tr>'; continue; }
+        out += '<tr>' + r.map(c=>`<td>${esc(c)}</td>`).join('') + '</tr>';
+      }
+      out += '</table>';
+      return out;
+    }
+    function buildExcelHtml(sheets){
+      const wsXml = sheets.map(s =>
+        `<x:ExcelWorksheet><x:Name>${esc(s.name)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>`
+      ).join('');
+      const bodyTables = sheets.map(s => tableHtml(s.rows)).join('\n');
+      return `
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8" />
+<!--[if gte mso 9]><xml>
+<x:ExcelWorkbook>
+  <x:ExcelWorksheets>
+    ${wsXml}
+  </x:ExcelWorksheets>
+</x:ExcelWorkbook>
+</xml><![endif]-->
+</head>
+<body>
+${bodyTables}
+</body>
+</html>`;
+    }
+    function downloadBlob(blob, filename){
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1500);
+    }
+
+    // Clear today with password (1234)
+    btnClear.onclick = ()=>{
+      pwdEl.value = '';
+      dlgClear.showModal();
+      setTimeout(()=>pwdEl.focus(), 150);
+    };
+    btnClearNo.onclick = ()=> dlgClear.close();
+    btnClearYes.onclick = ()=>{
+      const d = I18N[lang] || I18N.ko;
+      const pwd = (pwdEl.value || '').trim();
+      if(pwd !== '1234'){
+        alert(d.pwdWrong);
+        pwdEl.value = '';
+        pwdEl.focus();
+        return;
+      }
+      localStorage.removeItem(todayKey());
+      lastSavedId = null;
+      store.set('qccounter_lastSavedId', lastSavedId);
+      dlgClear.close();
+      renderAll();
+    };
+
+    applyLang();
+    renderAll();
+
+    // Service Worker register (for GitHub Pages / installable PWA)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
