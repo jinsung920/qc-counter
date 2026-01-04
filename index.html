@@ -23,7 +23,7 @@
       color:var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Helvetica, Arial, sans-serif;
       min-height: 100vh;
-      overflow: hidden; /* keep the app fixed to one screen; use internal scroll areas */
+      overflow: auto; /* allow page scroll if needed (user requested to remove scroll lock) */
     }
 
     /* Splash */
@@ -50,7 +50,8 @@
       max-width: 1320px;
       margin: 0 auto;
       padding: 16px;
-      height: 100vh;
+      height: 100dvh;
+      height: 100vh; /* fallback */
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -93,7 +94,7 @@
       display: flex;
       flex-direction: column;
       min-height: 0;
-      overflow: hidden;
+      overflow: visible; /* do not clip; allow contents to size naturally */
     }
 
     /* give left much more room; keep right narrow */
@@ -116,15 +117,21 @@
     .actionGrid {
       display:grid;
       grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr; /* fill left panel vertically (large screens) */
       gap: 14px;
       margin-top: 10px;
+      flex: 1 1 auto;
+      min-height: 0;
     }
+
+    /* push the hint/state area to the bottom so empty space disappears */
+    .panel.left .stateRow{ margin-top: auto; }
 
     .btn.big {
       width:100%;
-      /* size adapts to device height so everything stays on one screen */
-      min-height: clamp(86px, 18vh, 160px);
-      padding: clamp(16px, 4.2vh, 40px) clamp(14px, 2.2vw, 22px);
+      /* let grid rows decide the height; keep a safe minimum */
+      min-height: 86px;
+      padding: clamp(14px, 3.6vh, 34px) clamp(14px, 2.2vw, 22px);
       font-size: clamp(22px, 4.2vw, 54px);
       border-radius: 24px;
       letter-spacing: .35px;
@@ -134,8 +141,11 @@
 
     /* keep buttons in 2 columns on most phones; stack only on very narrow screens */
     @media (max-width: 420px){
-      .actionGrid{ grid-template-columns: 1fr; }
-      .btn.big{ min-height: clamp(76px, 16vh, 120px); font-size: clamp(20px, 6vw, 34px); }
+      .actionGrid{
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, auto);
+      }
+      .btn.big{ min-height: 78px; font-size: clamp(20px, 6vw, 34px); }
     }
 
     /* small height devices: reduce paddings so everything fits */
@@ -155,7 +165,7 @@
       .panel{ padding: 10px; }
       .actionGrid{ gap: 8px; }
       .btn.big{ min-height: 64px; padding: 10px 12px; font-size: clamp(18px, 3.4vw, 32px); border-radius:20px; }
-      .panel.left{ overflow:auto; } /* if still tight, allow internal scroll (no page cut) */
+      .tableBox{ min-height: 180px; } /* guarantee some hour rows */
     }
 
     /* when screen is narrow AND portrait, stack panels (landscape keeps side-by-side) */
@@ -198,9 +208,9 @@
       border:1px solid var(--line);
       border-radius:12px;
       overflow:auto;
-      flex: 1 1 auto;
-      min-height: 0;
-      max-height: min(320px, 38vh); /* smaller than before */
+      flex: 1 1 auto;           /* fill the right panel so no blank area */
+      min-height: 220px;        /* ensure hours are visible on small screens */
+      max-height: none;         /* allow tall tables on big tablets */
     }
 
     .stat { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin: 6px 0 10px 0; }
