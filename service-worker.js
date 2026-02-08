@@ -4,7 +4,7 @@
  * 업데이트가 바로 반영되지 않으면 CACHE_VERSION을 올리세요.
  * 예: v1.0.1 -> v1.0.2
  */
-const CACHE_VERSION = "v1.0.6";
+const CACHE_VERSION = "v1.0.7";
 const CACHE_NAME = `qccounter-${CACHE_VERSION}`;
 
 /**

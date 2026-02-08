@@ -274,6 +274,61 @@
       outline:none;
     }
     input[type="password"]:focus{border-color:#334155; box-shadow:0 0 0 2px rgba(59,130,246,.25)}
+  
+    /* Meta fields (Operator / Location) */
+    .metaFields{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .metaFields .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .metaFields input,
+    .metaFields select{
+      width:100%;
+      background: rgba(16,24,39,.8);
+      color: var(--text);
+      border:1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 16px;
+      outline: none;
+    }
+    .metaFields input:focus,
+    .metaFields select:focus{
+      border-color: rgba(59,130,246,.8);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+    }
+    .syncRow{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      user-select:none;
+    }
+    .syncDot{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--muted);
+      box-shadow: 0 0 0 3px rgba(148,163,184,.12);
+    }
+    .syncDot.ok{ background: var(--ok); box-shadow: 0 0 0 3px rgba(34,197,94,.14); }
+    .syncDot.warn{ background: var(--warn); box-shadow: 0 0 0 3px rgba(245,158,11,.14); }
+    .syncDot.ng{ background: var(--ng); box-shadow: 0 0 0 3px rgba(239,68,68,.14); }
+
+    @media (max-width: 900px){
+      .metaFields{ grid-template-columns: 1fr; }
+    }
+
   </style>
 </head>
 <body>
@@ -313,6 +368,29 @@
     <div class="row">
       <section class="panel left">
         <h3 style="margin:0 0 8px 0" data-i18n="panelLeft">판정 + 저장</h3>
+
+
+        <div class="metaFields">
+          <label class="field">
+            <span data-i18n="operatorLabel">Operator</span>
+            <input id="operatorInput" type="text" maxlength="40" autocomplete="off" placeholder="Name" />
+          </label>
+          <label class="field">
+            <span data-i18n="locationLabel">위치</span>
+            <select id="locationSelect">
+              <option value="Line 1, 1st">Line 1, 1st</option>
+              <option value="Line 1, 2nd">Line 1, 2nd</option>
+              <option value="Line 2, 1st">Line 2, 1st</option>
+              <option value="Line 2, 2nd">Line 2, 2nd</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="syncRow" aria-live="polite">
+          <span class="syncDot" id="syncDot"></span>
+          <span id="syncText">Cloud: -</span>
+        </div>
+
 
         <div class="actionGrid">
           <button class="btn ok big" id="btnOK" data-i18n="btnOK">OK</button>
@@ -380,6 +458,11 @@
     </div>
   </dialog>
 
+  <!-- Firebase (Cloud Sync) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
   <script>
     // Splash control: logo 1.5s → text 1.5s (works even in some limited viewers)
     (function(){
@@ -430,6 +513,17 @@
         btnCancel: '취소 (Undo)',
         stateNone: '미선택',
         hint: '절차: 판정 선택(OK/NG) → <span class="kbd">Check</span> → (필요 시 Undo)',
+        operatorLabel: 'Operator',
+        operatorPlaceholder: '이름 입력',
+        locationLabel: '위치',
+        cloudLabel: 'Cloud',
+        cloudReady: '연결됨',
+        cloudConnecting: '연결 중',
+        cloudOffline: '오프라인',
+        cloudQueue: '전송 대기',
+        cloudError: '오류',
+        alertNeedOperator: 'Operator 이름을 입력해주세요.',
+        alertNeedLocation: '위치를 선택해주세요.',
         privacyHint: '※ 현장 화면에는 시간별 상세 기록을 표시하지 않습니다. (관리자는 내보내기 파일에서 확인)',
         sumToday: '오늘 누계',
         thHour: '시간', thQty: '수량',
@@ -506,6 +600,12 @@
     const btnClear = document.getElementById('btnClear');
     const langSel = document.getElementById('lang');
 
+    const operatorInput = document.getElementById('operatorInput');
+    const locationSelect = document.getElementById('locationSelect');
+    const syncDot = document.getElementById('syncDot');
+    const syncText = document.getElementById('syncText');
+
+
     const dlgCancel = document.getElementById('dlgCancel');
     const btnYes = document.getElementById('btnYes');
     const btnNo = document.getElementById('btnNo');
@@ -526,7 +626,188 @@
         }
       });
       if(!selected){ currentState.innerHTML = `<span class="state-none">${d.stateNone}</span>`; }
+  
+      try{ if(operatorInput) operatorInput.placeholder = d.operatorPlaceholder || ''; }catch(_){ }
+      try{ renderCloudStatus(); }catch(_){ }
     }
+
+
+    const prefOperatorKey = 'qccounter_operator';
+    const prefLocationKey = 'qccounter_location';
+
+    // Stable device id for this browser/device (used for export/cloud)
+    let deviceId = store.get('qccounter_deviceId', null);
+    if(!deviceId){
+      deviceId = 'DEV-' + Math.random().toString(16).slice(2,10).toUpperCase();
+      store.set('qccounter_deviceId', deviceId);
+    }
+
+    // Restore last Operator/Location (keeps workflow fast on shopfloor)
+    if(operatorInput){
+      operatorInput.value = store.get(prefOperatorKey, '');
+      operatorInput.addEventListener('change', ()=>{
+        store.set(prefOperatorKey, (operatorInput.value || '').trim());
+      });
+    }
+    if(locationSelect){
+      const savedLoc = store.get(prefLocationKey, 'Line 1, 1st');
+      // If saved value doesn't exist in options, fallback to first.
+      locationSelect.value = savedLoc;
+      if(!locationSelect.value) locationSelect.value = 'Line 1, 1st';
+      locationSelect.addEventListener('change', ()=>{
+        store.set(prefLocationKey, locationSelect.value);
+      });
+    }
+
+    // --- Cloud Sync (Firestore) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCcsPxBwkw-BjyDD4nY-Abgm1o7SzUQBVw",
+      authDomain: "exo-qc-inspection.firebaseapp.com",
+      projectId: "exo-qc-inspection",
+      storageBucket: "exo-qc-inspection.firebasestorage.app",
+      messagingSenderId: "369602098868",
+      appId: "1:369602098868:web:162331169564f1fbcf49e1",
+      measurementId: "G-1ESXKXBLP1"
+    };
+
+    const pendingKey = 'qccounter_pending';
+    const cloud = { state: 'init', extra: '', ready: false, db: null };
+
+    function loadPending(){
+      try{
+        const x = JSON.parse(localStorage.getItem(pendingKey) || '[]');
+        return Array.isArray(x) ? x : [];
+      }catch(_){ return []; }
+    }
+    function savePending(arr){
+      try{ localStorage.setItem(pendingKey, JSON.stringify(arr || [])); }catch(_){}
+    }
+
+    function renderCloudStatus(){
+      if(!syncText || !syncDot) return;
+      const d = I18N[lang] || I18N.ko;
+      const label = d.cloudLabel || 'Cloud';
+      let text = label + ': ';
+      let cls = '';
+      if(cloud.state === 'ready'){ text += (d.cloudReady || 'Ready'); cls = 'ok'; }
+      else if(cloud.state === 'connecting'){ text += (d.cloudConnecting || 'Connecting'); cls = 'warn'; }
+      else if(cloud.state === 'offline'){ text += (d.cloudOffline || 'Offline'); cls = 'warn'; }
+      else if(cloud.state === 'queue'){
+        const n = cloud.extra ? cloud.extra : '';
+        text += (d.cloudQueue || 'Queue') + (n ? ` (${n})` : '');
+        cls = 'warn';
+      }
+      else if(cloud.state === 'error'){
+        const msg = cloud.extra ? cloud.extra : '';
+        text += (d.cloudError || 'Error') + (msg ? ` (${msg})` : '');
+        cls = 'ng';
+      } else {
+        text += '-';
+      }
+      syncText.textContent = text;
+      syncDot.className = 'syncDot ' + cls;
+    }
+    function setCloudState(state, extra=''){
+      cloud.state = state;
+      cloud.extra = extra || '';
+      renderCloudStatus();
+    }
+
+    function buildCloudPayload(row){
+      return {
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        localDate: row.date,
+        localTime: row.time,
+        operator: row.operator || '',
+        location: row.location || '',
+        result: row.final,
+        deviceId: row.deviceId || deviceId
+      };
+    }
+
+    async function flushPending(){
+      if(!cloud.ready || !cloud.db) return;
+      if(!navigator.onLine){ setCloudState('offline'); return; }
+
+      const pending = loadPending();
+      if(!pending.length){ setCloudState('ready'); return; }
+
+      setCloudState('queue', String(pending.length));
+      // Send sequentially to avoid throttling; stop on first error.
+      for(let i=0; i<pending.length; i++){
+        const row = pending[i];
+        await cloud.db.collection('qcEvents').add(buildCloudPayload(row));
+        // Remove the sent item
+        const next = loadPending();
+        next.shift();
+        savePending(next);
+        setCloudState(next.length ? 'queue' : 'ready', next.length ? String(next.length) : '');
+      }
+    }
+
+    function enqueuePending(row){
+      const pending = loadPending();
+      pending.push(row);
+      savePending(pending);
+      setCloudState('queue', String(pending.length));
+    }
+
+    function cloudTrySend(row){
+      // If Firebase not ready yet, queue it (will be flushed after sign-in)
+      if(!cloud.ready || !cloud.db){
+        enqueuePending(row);
+        return;
+      }
+      if(!navigator.onLine){
+        enqueuePending(row);
+        setCloudState('offline');
+        return;
+      }
+      cloud.db.collection('qcEvents').add(buildCloudPayload(row))
+        .then(()=>{
+          // If there is still backlog, flush; otherwise just show ready.
+          flushPending().catch(()=>{});
+        })
+        .catch((err)=>{
+          enqueuePending(row);
+          setCloudState('error', (err && err.message) ? err.message : 'write failed');
+        });
+    }
+
+    function initCloud(){
+      try{
+        if(typeof firebase === 'undefined'){
+          setCloudState('error', 'SDK missing');
+          return;
+        }
+        if(firebase.apps && firebase.apps.length){
+          // reuse
+        } else {
+          firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        cloud.db = db;
+
+        // Optional offline persistence (best effort)
+        try{
+          db.enablePersistence({ synchronizeTabs: true }).catch(()=>{});
+        }catch(_){}
+
+        setCloudState(navigator.onLine ? 'connecting' : 'offline');
+
+        auth.signInAnonymously()
+          .then(()=>{ cloud.ready = true; setCloudState(navigator.onLine ? 'ready' : 'offline'); flushPending().catch(()=>{}); })
+          .catch((err)=>{ setCloudState('error', (err && err.message) ? err.message : 'auth failed'); });
+
+        window.addEventListener('online', ()=>{ if(cloud.ready) { setCloudState('ready'); flushPending().catch(()=>{}); } else { setCloudState('connecting'); } });
+        window.addEventListener('offline', ()=>{ setCloudState('offline'); });
+
+      }catch(e){
+        setCloudState('error', e && e.message ? e.message : 'init failed');
+      }
+    }
+
 
     langSel.value = lang;
     langSel.addEventListener('change', ()=>{
@@ -549,23 +830,44 @@
     function getRows(){ return store.get(todayKey(), []); }
     function setRows(rows){ store.set(todayKey(), rows); }
 
-    function saveRecord(final){
+    function saveRecord(final, operator, location){
       const now = new Date();
-      const date = now.toISOString().slice(0,10);
+      const date = localDateStr(now);
       const time = now.toTimeString().slice(0,8);
       const id = `${date}T${time}.${now.getMilliseconds()}_${Math.random().toString(16).slice(2,8)}`;
-      const row = { id, date, time, final };
+      const row = { id, date, time, final, operator: operator || '', location: location || '', deviceId };
       const rows = getRows();
       rows.push(row);
       setRows(rows);
       lastSavedId = id;
       store.set('qccounter_lastSavedId', lastSavedId);
+
+      // Cloud sync (best effort)
+      try{ cloudTrySend(row); }catch(_){}
     }
 
     btnCheck.onclick = ()=>{
       const d = I18N[lang] || I18N.ko;
       if(!selected){ alert(d.alertSelect); return; }
-      saveRecord(selected);
+
+      const op = (operatorInput && operatorInput.value ? operatorInput.value : '').trim();
+      if(!op){
+        alert(d.alertNeedOperator || 'Please enter operator.');
+        try{ operatorInput && operatorInput.focus(); }catch(_){}
+        return;
+      }
+      const loc = (locationSelect && locationSelect.value) ? locationSelect.value : '';
+      if(!loc){
+        alert(d.alertNeedLocation || 'Please select location.');
+        try{ locationSelect && locationSelect.focus(); }catch(_){}
+        return;
+      }
+
+      // persist latest for convenience
+      store.set(prefOperatorKey, op);
+      store.set(prefLocationKey, loc);
+
+      saveRecord(selected, op, loc);
       selected = null;
       currentState.innerHTML = `<span class="state-none">${d.stateNone}</span>`;
       renderAll();
@@ -630,6 +932,9 @@
 
       const summaryRows = [
         ['Date', date],
+        ['DeviceId', deviceId],
+        ['Operators', Array.from(new Set(rows.map(r=>r.operator||'').filter(Boolean))).join(', ')],
+        ['Locations', Array.from(new Set(rows.map(r=>r.location||'').filter(Boolean))).join(', ')],
         ['Total', String(sumT)],
         ['OK', String(sumO)],
         ['NG', String(sumN)],
@@ -639,8 +944,8 @@
       ];
 
       const detailRows = [
-        ['date','time','final'],
-        ...rows.map(r=>[r.date, r.time, r.final])
+        ['date','time','result','operator','location','deviceId'],
+        ...rows.map(r=>[r.date, r.time, r.final, r.operator || '', r.location || '', r.deviceId || ''])
       ];
 
       const xlsHtml = buildExcelHtml([
@@ -716,6 +1021,13 @@ ${bodyTables}
         return;
       }
       localStorage.removeItem(todayKey());
+      // Also drop pending cloud queue items for today (keeps clear consistent)
+      try{
+        const today = localDateStr(new Date());
+        const p = loadPending();
+        const next = p.filter(x=>x && x.date !== today);
+        savePending(next);
+      }catch(_){ }
       lastSavedId = null;
       store.set('qccounter_lastSavedId', lastSavedId);
       dlgClear.close();
@@ -724,6 +1036,10 @@ ${bodyTables}
 
     applyLang();
     renderAll();
+
+    // Cloud sync init
+    renderCloudStatus();
+    initCloud();
 
     // Service Worker register (for GitHub Pages / installable PWA)
     if ("serviceWorker" in navigator) {
