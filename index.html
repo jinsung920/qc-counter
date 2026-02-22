@@ -138,6 +138,7 @@
       padding:12px 14px; border-radius:16px; font-weight:900;
     }
     .btn:active { transform: translateY(1px); }
+    #btnSettings{ width:44px; height:44px; padding:0; border-radius:14px; font-size:18px; }
     .btn.ok { background: rgba(34,197,94,.18); border-color:#1e8a55; }
     .btn.ng { background: rgba(239,68,68,.18); border-color:#a23232; }
     .btn.primary { background: linear-gradient(180deg,#2a4fa0,#1f3d7a); border-color:#335fc1; }
@@ -353,6 +354,8 @@
         <div class="muted" data-i18n="subtitle">판정 선택 후 Check를 누르면 1건이 기록됩니다. (오른쪽은 시간대별 누계)</div>
       </div>
       <div class="toolbar">
+        <span class="chip" id="deviceChip">Device: -</span>
+        <button class="btn" id="btnSettings" title="Settings" aria-label="Settings">⚙️</button>
         <label class="muted" style="display:flex; align-items:center; gap:8px">
           <span data-i18n="langLabel">언어</span>
           <select id="lang" class="langSelect">
@@ -458,12 +461,37 @@
     </div>
   </dialog>
 
-  <!-- Firebase (Cloud Sync) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
-  <script>
+  <!-- Settings dialog (Device) -->
+  <dialog id="dlgSettings">
+    <div class="dlgWrap">
+      <div class="dlgTitle" data-i18n="settingsTitle">설정</div>
+      <p class="dlgMsg" data-i18n="settingsMsg">이 태블릿의 Device를 선택하세요. (T1~T4)</p>
+
+      <div class="fieldLabel" data-i18n="deviceLabel">Device ID</div>
+      <select id="deviceSelect" style="width:100%; background:#0a1325; border:1px solid #1f2937; color:var(--text); padding:12px; border-radius:12px; font-size:16px; font-weight:800;">
+        <option value="T1">T1</option>
+        <option value="T2">T2</option>
+        <option value="T3">T3</option>
+        <option value="T4">T4</option>
+      </select>
+
+      <div class="hint" style="margin-top:10px" data-i18n="settingsHint">
+        ※ 변경 후 새 기록부터 해당 탭(Raw_T1~Raw_T4)으로 저장됩니다.
+      </div>
+
+      <div class="dlgBtns" style="margin-top:14px">
+        <button class="btn" id="btnSettingsClose" data-i18n="close">닫기</button>
+        <button class="btn primary" id="btnSettingsSave" data-i18n="save">저장</button>
+      </div>
+    </div>
+  </dialog>
+
+
+  <!-- Cloud Sync (Apps Script) -->
+
+
+<script>
     // Splash control: logo 1.5s → text 1.5s (works even in some limited viewers)
     (function(){
       const splash = document.getElementById('splash');
@@ -500,6 +528,7 @@
 
     const I18N = {
       ko: {
+
         title: 'QC Counter (CHOI)',
         subtitle: '판정 선택 후 Check를 누르면 1건이 기록됩니다. (오른쪽은 시간대별 누계)',
         langLabel: '언어',
@@ -520,6 +549,12 @@
         cloudReady: '연결됨',
         cloudConnecting: '연결 중',
         cloudOffline: '오프라인',
+        settingsTitle: '설정',
+        settingsMsg: '이 태블릿의 Device를 선택하세요. (T1~T4)',
+        deviceLabel: 'Device ID',
+        settingsHint: '※ 변경 후 새 기록부터 해당 탭(Raw_T1~Raw_T4)으로 저장됩니다.',
+        save: '저장',
+        close: '닫기',
         cloudQueue: '전송 대기',
         cloudError: '오류',
         alertNeedOperator: 'Operator 이름을 입력해주세요.',
@@ -543,6 +578,7 @@
         exportedMsg: '내보내기 완료: 파일이 다운로드(Downloads) 폴더에 저장됩니다.'
       },
       vi: {
+
         title: 'QC Counter (CHOI)',
         subtitle: 'Chọn OK/NG rồi nhấn Check để lưu 1 sản phẩm. (Bên phải: cộng dồn theo giờ)',
         langLabel: 'Ngôn ngữ',
@@ -580,7 +616,9 @@
       get: (k,v)=>{ try { return JSON.parse(localStorage.getItem(k)) ?? v } catch { return v } },
       set: (k,v)=> localStorage.setItem(k, JSON.stringify(v)),
     };
-    const todayKey = ()=> 'qccounter_' + new Date().toISOString().slice(0,10);
+    const pad2 = (n)=> String(n).padStart(2,'0');
+    const localDateStr = (d=new Date())=> `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    const todayKey = ()=> 'qccounter_' + localDateStr(new Date());
 
     let selected = null;
     let lang = store.get('qccounter_lang','ko');
@@ -606,6 +644,15 @@
     const syncText = document.getElementById('syncText');
 
 
+    const btnSettings = document.getElementById('btnSettings');
+    const deviceChip = document.getElementById('deviceChip');
+
+    const dlgSettings = document.getElementById('dlgSettings');
+    const deviceSelectEl = document.getElementById('deviceSelect');
+    const btnSettingsSave = document.getElementById('btnSettingsSave');
+    const btnSettingsClose = document.getElementById('btnSettingsClose');
+
+
     const dlgCancel = document.getElementById('dlgCancel');
     const btnYes = document.getElementById('btnYes');
     const btnNo = document.getElementById('btnNo');
@@ -629,17 +676,46 @@
   
       try{ if(operatorInput) operatorInput.placeholder = d.operatorPlaceholder || ''; }catch(_){ }
       try{ renderCloudStatus(); }catch(_){ }
+      try{ renderDeviceChip(); }catch(_){ }
     }
 
 
     const prefOperatorKey = 'qccounter_operator';
     const prefLocationKey = 'qccounter_location';
 
-    // Stable device id for this browser/device (used for export/cloud)
-    let deviceId = store.get('qccounter_deviceId', null);
-    if(!deviceId){
-      deviceId = 'DEV-' + Math.random().toString(16).slice(2,10).toUpperCase();
-      store.set('qccounter_deviceId', deviceId);
+    // Device ID for this tablet (T1~T4). Set per tablet.
+    // Default device on first run (can be changed in Settings ⚙️)
+    const DEFAULT_DEVICE_ID = 'T1';
+
+    // Persisted deviceId (so it doesn't change accidentally)
+    let deviceId = store.get('qccounter_deviceId', DEFAULT_DEVICE_ID);
+    if(!deviceId) deviceId = DEFAULT_DEVICE_ID;
+    store.set('qccounter_deviceId', deviceId);
+
+
+    function renderDeviceChip(){
+      if(!deviceChip) return;
+      deviceChip.textContent = `Device: ${deviceId}`;
+    }
+
+    function openSettings(force=false){
+      if(!dlgSettings) return;
+      if(deviceSelectEl) deviceSelectEl.value = deviceId;
+      // If dialog is already open, do nothing
+      try {
+        if(typeof dlgSettings.showModal === 'function'){
+          if(!dlgSettings.open) dlgSettings.showModal();
+        } else {
+          dlgSettings.setAttribute('open','');
+        }
+      } catch(_) {
+        dlgSettings.setAttribute('open','');
+      }
+    }
+
+    function closeSettings(){
+      if(!dlgSettings) return;
+      try{ dlgSettings.close(); }catch(_){ dlgSettings.removeAttribute('open'); }
     }
 
     // Restore last Operator/Location (keeps workflow fast on shopfloor)
@@ -659,19 +735,226 @@
       });
     }
 
-    // --- Cloud Sync (Firestore) ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyCcsPxBwkw-BjyDD4nY-Abgm1o7SzUQBVw",
-      authDomain: "exo-qc-inspection.firebaseapp.com",
-      projectId: "exo-qc-inspection",
-      storageBucket: "exo-qc-inspection.firebasestorage.app",
-      messagingSenderId: "369602098868",
-      appId: "1:369602098868:web:162331169564f1fbcf49e1",
-      measurementId: "G-1ESXKXBLP1"
-    };
+
+// ------------------------------------------------------------
+// Device 설정 (단일 index.html로 4대 운영)
+// - 최초 실행: 기본값(T1)을 사용
+// - 변경: 우측 상단 ⚙️ 설정에서 변경(로컬에 저장됨)
+// ------------------------------------------------------------
+const DEVICE_OPTIONS = ['T1','T2','T3','T4'];
+if(!DEVICE_OPTIONS.includes(deviceId)){
+  deviceId = DEFAULT_DEVICE_ID;
+  store.set('qccounter_deviceId', deviceId);
+  // first run / invalid value → open settings after render
+  setTimeout(()=>{ try{ openSettings(true); }catch(_){} }, 250);
+}
+// secret은 deviceId 기반으로 자동 매핑 (T1_EXO ~ T4_EXO)
+function getDeviceSecret(){
+  return `${deviceId}_EXO`;
+}
+
+renderDeviceChip();
+
+// ------------------------------------------------------------
+// Core App Logic
+// ------------------------------------------------------------
+langSel.value = lang;
+langSel.addEventListener('change', ()=>{
+  lang = langSel.value;
+  store.set('qccounter_lang', lang);
+  applyLang();
+  renderAll();
+});
+
+// Settings button (Device)
+if(btnSettings){
+  btnSettings.addEventListener('click', ()=> openSettings(false));
+}
+if(btnSettingsClose){
+  btnSettingsClose.addEventListener('click', ()=> closeSettings());
+}
+if(btnSettingsSave){
+  btnSettingsSave.addEventListener('click', ()=>{
+    const picked = (deviceSelectEl?.value || '').trim().toUpperCase();
+    if(picked && DEVICE_OPTIONS.includes(picked)){
+      deviceId = picked;
+      store.set('qccounter_deviceId', deviceId);
+      renderDeviceChip();
+      // reflect on export naming etc.
+      renderAll();
+      // feedback in cloud status line
+      setSyncStatus('ok', `${(I18N[lang]||I18N.ko).cloudReady || '연결됨'} / ${deviceId}`);
+    }
+    closeSettings();
+  });
+}
+
+btnOK.onclick = ()=> setSelected('OK');
+btnNG.onclick = ()=> setSelected('NG');
+
+function setSelected(v){
+  selected = v;
+  currentState.innerHTML = v === 'OK'
+    ? '<span class="state-ok">OK</span>'
+    : '<span class="state-ng">NG</span>';
+}
+
+function getRows(){ return store.get(todayKey(), []); }
+function setRows(rows){ store.set(todayKey(), rows); }
+
+function saveRecord(final){
+  const now = new Date();
+  const date = localDateStr(now);
+  const time = now.toTimeString().slice(0,8);
+  const id = `${date}T${time}.${now.getMilliseconds()}_${Math.random().toString(16).slice(2,8)}`;
+  const operator = (operatorInput?.value || '').trim();
+  const location = (locationSelect?.value || '').trim();
+  const row = { id, date, time, final, operator, location, deviceId };
+  const rows = getRows();
+  rows.push(row);
+  setRows(rows);
+  lastSavedId = id;
+  store.set('qccounter_lastSavedId', lastSavedId);
+  return row;
+}
+
+function buildHourAgg(rows){
+  const hours = Array.from({length:24}, (_,i)=>({h:i, total:0, ok:0, ng:0}));
+  let sumT=0, sumO=0, sumN=0;
+  for(const r of rows){
+    const h = parseInt(String(r.time||'00').slice(0,2),10);
+    const obj = hours[h] || hours[0];
+    obj.total += 1; sumT += 1;
+    if(r.final==='OK'){ obj.ok+=1; sumO+=1; } else { obj.ng+=1; sumN+=1; }
+  }
+  return {hours, sumT, sumO, sumN};
+}
+
+function renderHourStats(){
+  const rows = getRows();
+  const {hours, sumT, sumO, sumN} = buildHourAgg(rows);
+  sumTotalEl.textContent = sumT; sumOKEl.textContent = sumO; sumNGEl.textContent = sumN;
+  hourTbody.innerHTML = '';
+  const nowH = new Date().getHours();
+  for(const obj of hours){
+    const hh = obj.h.toString().padStart(2,'0');
+    const tr = document.createElement('tr');
+    const bold = obj.h===nowH ? 'font-weight:900' : '';
+    tr.innerHTML = `<td style="${bold}">${hh}:00</td><td>${obj.total}</td><td class="okT">${obj.ok}</td><td class="ngT">${obj.ng}</td>`;
+    hourTbody.appendChild(tr);
+  }
+}
+
+function renderAll(){ renderHourStats(); }
+
+// --- Export helpers ---
+function rowsToCsv(rows){
+  const escCsv = (v)=> '"' + String(v ?? '').replace(/"/g,'""') + '"';
+  return rows.map(r => (r.length===0 ? '' : r.map(escCsv).join(','))).join('\r\n') + '\r\n';
+}
+function downloadBlob(blob, filename){
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 400);
+}
+
+btnExport.onclick = ()=>{
+  const d = I18N[lang] || I18N.ko;
+  const rows = getRows();
+  if(rows.length===0){ alert(d.alertNoData); return; }
+  const now = new Date();
+  const date = localDateStr(now);
+  const {hours, sumT, sumO, sumN} = buildHourAgg(rows);
+
+  const summaryRows = [
+    ['Date', date],
+    ['Device', deviceId],
+    ['Total', String(sumT)],
+    ['OK', String(sumO)],
+    ['NG', String(sumN)],
+    [],
+    ['Hour', 'Qty', 'OK', 'NG'],
+    ...hours.map(h=>[`${String(h.h).padStart(2,'0')}:00`, String(h.total), String(h.ok), String(h.ng)])
+  ];
+  const detailRows = [
+    ['date','time','operator','location','result','deviceId'],
+    ...rows.map(r=>[r.date, r.time, r.operator||'', r.location||'', r.final, r.deviceId||''])
+  ];
+
+  downloadBlob(new Blob([rowsToCsv(summaryRows)], {type:'text/csv;charset=utf-8'}), `QCCount_${deviceId}_${date}_Summary.csv`);
+  setTimeout(()=>{
+    downloadBlob(new Blob([rowsToCsv(detailRows)], {type:'text/csv;charset=utf-8'}), `QCCount_${deviceId}_${date}_Detail.csv`);
+  }, 150);
+  alert(d.exportedMsg || 'Exported.');
+};
+
+// --- Check / Undo / Clear ---
+btnCheck.onclick = async ()=>{
+  const d = I18N[lang] || I18N.ko;
+  if(!selected){ alert(d.alertSelect); return; }
+  const op = (operatorInput?.value || '').trim();
+  if(!op){ alert(d.alertNeedOperator); return; }
+  const loc = (locationSelect?.value || '').trim();
+  if(!loc){ alert(d.alertNeedLocation); return; }
+
+  const row = saveRecord(selected);
+
+  // reset selection
+  selected = null;
+  currentState.innerHTML = `<span class="state-none">${d.stateNone}</span>`;
+  renderAll();
+
+  // cloud sync best-effort
+  try{ await cloudTrySend(row); }catch(_){}
+};
+
+btnCancel.onclick = ()=>{
+  const d = I18N[lang] || I18N.ko;
+  const rows = getRows();
+  if(!rows.length || !lastSavedId){ alert(d.alertNoUndo); return; }
+  dlgCancel.showModal();
+};
+btnNo.onclick = ()=> dlgCancel.close();
+btnYes.onclick = ()=>{
+  const rows = getRows();
+  const idx = rows.findIndex(r => r.id === lastSavedId);
+  if(idx >= 0){
+    rows.splice(idx, 1);
+    setRows(rows);
+  }
+  lastSavedId = rows.length ? rows[rows.length - 1].id : null;
+  store.set('qccounter_lastSavedId', lastSavedId);
+  dlgCancel.close();
+  renderAll();
+};
+
+const ADMIN_PWD = '1234';
+btnClear.onclick = ()=>{
+  pwdEl.value = '';
+  dlgClear.showModal();
+};
+btnClearNo.onclick = ()=> dlgClear.close();
+btnClearYes.onclick = ()=>{
+  const d = I18N[lang] || I18N.ko;
+  if((pwdEl.value || '').trim() !== ADMIN_PWD){
+    alert(d.pwdWrong || 'Wrong password');
+    return;
+  }
+  store.set(todayKey(), []);
+  lastSavedId = null;
+  store.set('qccounter_lastSavedId', lastSavedId);
+  dlgClear.close();
+  renderAll();
+};
+    // --- Cloud Sync (Apps Script Web App) ---
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQX5Z8igCTigO3Xh7LOrXQVBlz0QnNQ5_a-9xfRDUJP2h1sgLSS9SAOdCWb23RiJSPVA/exec";
 
     const pendingKey = 'qccounter_pending';
-    const cloud = { state: 'init', extra: '', ready: false, db: null };
+    const cloud = { state: 'init', extra: '' };
 
     function loadPending(){
       try{
@@ -690,7 +973,6 @@
       let text = label + ': ';
       let cls = '';
       if(cloud.state === 'ready'){ text += (d.cloudReady || 'Ready'); cls = 'ok'; }
-      else if(cloud.state === 'connecting'){ text += (d.cloudConnecting || 'Connecting'); cls = 'warn'; }
       else if(cloud.state === 'offline'){ text += (d.cloudOffline || 'Offline'); cls = 'warn'; }
       else if(cloud.state === 'queue'){
         const n = cloud.extra ? cloud.extra : '';
@@ -713,31 +995,49 @@
       renderCloudStatus();
     }
 
-    function buildCloudPayload(row){
+    function buildAppsScriptPayload(row){
       return {
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        deviceId: deviceId,
+        secret: getDeviceSecret(),
         localDate: row.date,
         localTime: row.time,
         operator: row.operator || '',
         location: row.location || '',
-        result: row.final,
-        deviceId: row.deviceId || deviceId
+        result: row.final
       };
     }
 
+    async function postWithTimeout(url, bodyObj, timeoutMs=8000){
+      const controller = new AbortController();
+      const t = setTimeout(()=>controller.abort(), timeoutMs);
+      try{
+        // NOTE: Apps Script Web App often doesn't return CORS headers.
+        // Using no-cors avoids browser blocking. Response will be opaque.
+        await fetch(url, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyObj),
+          signal: controller.signal
+        });
+        return true;
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
     async function flushPending(){
-      if(!cloud.ready || !cloud.db) return;
       if(!navigator.onLine){ setCloudState('offline'); return; }
 
       const pending = loadPending();
       if(!pending.length){ setCloudState('ready'); return; }
 
       setCloudState('queue', String(pending.length));
-      // Send sequentially to avoid throttling; stop on first error.
+      // Send sequentially; stop on first error to avoid burning requests.
       for(let i=0; i<pending.length; i++){
         const row = pending[i];
-        await cloud.db.collection('qcEvents').add(buildCloudPayload(row));
-        // Remove the sent item
+        await postWithTimeout(APPS_SCRIPT_URL, buildAppsScriptPayload(row));
+        // remove sent item
         const next = loadPending();
         next.shift();
         savePending(next);
@@ -752,287 +1052,33 @@
       setCloudState('queue', String(pending.length));
     }
 
-    function cloudTrySend(row){
-      // If Firebase not ready yet, queue it (will be flushed after sign-in)
-      if(!cloud.ready || !cloud.db){
-        enqueuePending(row);
-        return;
-      }
+    async function cloudTrySend(row){
       if(!navigator.onLine){
         enqueuePending(row);
         setCloudState('offline');
         return;
       }
-      cloud.db.collection('qcEvents').add(buildCloudPayload(row))
-        .then(()=>{
-          // If there is still backlog, flush; otherwise just show ready.
-          flushPending().catch(()=>{});
-        })
-        .catch((err)=>{
-          enqueuePending(row);
-          setCloudState('error', (err && err.message) ? err.message : 'write failed');
-        });
+      try{
+        await postWithTimeout(APPS_SCRIPT_URL, buildAppsScriptPayload(row));
+        // Best effort success (opaque response). If you want strict ACK, you'd need CORS-enabled endpoint.
+        setCloudState(loadPending().length ? 'queue' : 'ready', loadPending().length ? String(loadPending().length) : '');
+      }catch(err){
+        // network / timeout
+        enqueuePending(row);
+        setCloudState('error', (err && err.name === 'AbortError') ? 'timeout' : 'network');
+      }
     }
 
     function initCloud(){
-      try{
-        if(typeof firebase === 'undefined'){
-          setCloudState('error', 'SDK missing');
-          return;
-        }
-        if(firebase.apps && firebase.apps.length){
-          // reuse
-        } else {
-          firebase.initializeApp(firebaseConfig);
-        }
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        cloud.db = db;
-
-        // Optional offline persistence (best effort)
-        try{
-          db.enablePersistence({ synchronizeTabs: true }).catch(()=>{});
-        }catch(_){}
-
-        setCloudState(navigator.onLine ? 'connecting' : 'offline');
-
-        auth.signInAnonymously()
-          .then(()=>{ cloud.ready = true; setCloudState(navigator.onLine ? 'ready' : 'offline'); flushPending().catch(()=>{}); })
-          .catch((err)=>{ setCloudState('error', (err && err.message) ? err.message : 'auth failed'); });
-
-        window.addEventListener('online', ()=>{ if(cloud.ready) { setCloudState('ready'); flushPending().catch(()=>{}); } else { setCloudState('connecting'); } });
-        window.addEventListener('offline', ()=>{ setCloudState('offline'); });
-
-      }catch(e){
-        setCloudState('error', e && e.message ? e.message : 'init failed');
-      }
+      // initial status
+      setCloudState(navigator.onLine ? (loadPending().length ? 'queue' : 'ready') : 'offline', loadPending().length ? String(loadPending().length) : '');
+      // flush when back online
+      window.addEventListener('online', ()=>{ flushPending().catch(()=>{}); });
+      window.addEventListener('offline', ()=>{ setCloudState('offline'); });
+      // try flush on load
+      if(navigator.onLine) flushPending().catch(()=>{});
     }
 
-
-    langSel.value = lang;
-    langSel.addEventListener('change', ()=>{
-      lang = langSel.value;
-      store.set('qccounter_lang', lang);
-      applyLang();
-      renderAll();
-    });
-
-    btnOK.onclick = ()=> setSelected('OK');
-    btnNG.onclick = ()=> setSelected('NG');
-
-    function setSelected(v){
-      selected = v;
-      currentState.innerHTML = v === 'OK'
-        ? '<span class="state-ok">OK</span>'
-        : '<span class="state-ng">NG</span>';
-    }
-
-    function getRows(){ return store.get(todayKey(), []); }
-    function setRows(rows){ store.set(todayKey(), rows); }
-
-    function saveRecord(final, operator, location){
-      const now = new Date();
-      const date = localDateStr(now);
-      const time = now.toTimeString().slice(0,8);
-      const id = `${date}T${time}.${now.getMilliseconds()}_${Math.random().toString(16).slice(2,8)}`;
-      const row = { id, date, time, final, operator: operator || '', location: location || '', deviceId };
-      const rows = getRows();
-      rows.push(row);
-      setRows(rows);
-      lastSavedId = id;
-      store.set('qccounter_lastSavedId', lastSavedId);
-
-      // Cloud sync (best effort)
-      try{ cloudTrySend(row); }catch(_){}
-    }
-
-    btnCheck.onclick = ()=>{
-      const d = I18N[lang] || I18N.ko;
-      if(!selected){ alert(d.alertSelect); return; }
-
-      const op = (operatorInput && operatorInput.value ? operatorInput.value : '').trim();
-      if(!op){
-        alert(d.alertNeedOperator || 'Please enter operator.');
-        try{ operatorInput && operatorInput.focus(); }catch(_){}
-        return;
-      }
-      const loc = (locationSelect && locationSelect.value) ? locationSelect.value : '';
-      if(!loc){
-        alert(d.alertNeedLocation || 'Please select location.');
-        try{ locationSelect && locationSelect.focus(); }catch(_){}
-        return;
-      }
-
-      // persist latest for convenience
-      store.set(prefOperatorKey, op);
-      store.set(prefLocationKey, loc);
-
-      saveRecord(selected, op, loc);
-      selected = null;
-      currentState.innerHTML = `<span class="state-none">${d.stateNone}</span>`;
-      renderAll();
-    };
-
-    btnCancel.onclick = ()=>{
-      const d = I18N[lang] || I18N.ko;
-      const rows = getRows();
-      if(!rows.length || !lastSavedId){ alert(d.alertNoUndo); return; }
-      dlgCancel.showModal();
-    };
-    btnNo.onclick = ()=> dlgCancel.close();
-    btnYes.onclick = ()=>{
-      const rows = getRows();
-      const idx = rows.findIndex(r => r.id === lastSavedId);
-      if(idx >= 0){
-        rows.splice(idx, 1);
-        setRows(rows);
-      }
-      lastSavedId = rows.length ? rows[rows.length - 1].id : null;
-      store.set('qccounter_lastSavedId', lastSavedId);
-      dlgCancel.close();
-      renderAll();
-    };
-
-    function renderAll(){ renderHourStats(); }
-
-    function buildHourAgg(rows){
-      const hours = Array.from({length:24}, (_,i)=>({h:i, total:0, ok:0, ng:0}));
-      let sumT=0, sumO=0, sumN=0;
-      for(const r of rows){
-        const h = parseInt(r.time.slice(0,2),10);
-        const obj = hours[h];
-        obj.total += 1; sumT += 1;
-        if(r.final==='OK'){ obj.ok+=1; sumO+=1; } else { obj.ng+=1; sumN+=1; }
-      }
-      return {hours, sumT, sumO, sumN};
-    }
-
-    function renderHourStats(){
-      const rows = getRows();
-      const {hours, sumT, sumO, sumN} = buildHourAgg(rows);
-      sumTotalEl.textContent = sumT; sumOKEl.textContent = sumO; sumNGEl.textContent = sumN;
-      hourTbody.innerHTML = '';
-      const nowH = new Date().getHours();
-      for(const obj of hours){
-        const hh = obj.h.toString().padStart(2,'0');
-        const tr = document.createElement('tr');
-        const bold = obj.h===nowH ? 'font-weight:900' : '';
-        tr.innerHTML = `<td style="${bold}">${hh}:00</td><td>${obj.total}</td><td class="okT">${obj.ok}</td><td class="ngT">${obj.ng}</td>`;
-        hourTbody.appendChild(tr);
-      }
-    }
-
-    // Export (Excel HTML) with Summary + Detail
-    btnExport.onclick = ()=>{
-      const d = I18N[lang] || I18N.ko;
-      const rows = getRows();
-      if(rows.length===0){ alert(d.alertNoData); return; }
-      const date = rows[0].date;
-      const {hours, sumT, sumO, sumN} = buildHourAgg(rows);
-
-      const summaryRows = [
-        ['Date', date],
-        ['DeviceId', deviceId],
-        ['Operators', Array.from(new Set(rows.map(r=>r.operator||'').filter(Boolean))).join(', ')],
-        ['Locations', Array.from(new Set(rows.map(r=>r.location||'').filter(Boolean))).join(', ')],
-        ['Total', String(sumT)],
-        ['OK', String(sumO)],
-        ['NG', String(sumN)],
-        [],
-        ['Hour', 'Qty', 'OK', 'NG'],
-        ...hours.map(h=>[`${String(h.h).padStart(2,'0')}:00`, String(h.total), String(h.ok), String(h.ng)])
-      ];
-
-      const detailRows = [
-        ['date','time','result','operator','location','deviceId'],
-        ...rows.map(r=>[r.date, r.time, r.final, r.operator || '', r.location || '', r.deviceId || ''])
-      ];
-
-      const xlsHtml = buildExcelHtml([
-        { name: 'Summary', rows: summaryRows },
-        { name: 'Detail', rows: detailRows }
-      ]);
-
-      const blob = new Blob([xlsHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
-      downloadBlob(blob, `QCCount_${date}.xls`);
-      alert(d.exportedMsg);
-    };
-
-    function esc(s){
-      return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-    }
-    function tableHtml(rows){
-      let out = '<table border="1" cellspacing="0" cellpadding="3">';
-      for(const r of rows){
-        if(r.length===0){ out += '<tr><td></td></tr>'; continue; }
-        out += '<tr>' + r.map(c=>`<td>${esc(c)}</td>`).join('') + '</tr>';
-      }
-      out += '</table>';
-      return out;
-    }
-    function buildExcelHtml(sheets){
-      const wsXml = sheets.map(s =>
-        `<x:ExcelWorksheet><x:Name>${esc(s.name)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>`
-      ).join('');
-      const bodyTables = sheets.map(s => tableHtml(s.rows)).join('\n');
-      return `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8" />
-<!--[if gte mso 9]><xml>
-<x:ExcelWorkbook>
-  <x:ExcelWorksheets>
-    ${wsXml}
-  </x:ExcelWorksheets>
-</x:ExcelWorkbook>
-</xml><![endif]-->
-</head>
-<body>
-${bodyTables}
-</body>
-</html>`;
-    }
-    function downloadBlob(blob, filename){
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 1500);
-    }
-
-    // Clear today with password (1234)
-    btnClear.onclick = ()=>{
-      pwdEl.value = '';
-      dlgClear.showModal();
-      setTimeout(()=>pwdEl.focus(), 150);
-    };
-    btnClearNo.onclick = ()=> dlgClear.close();
-    btnClearYes.onclick = ()=>{
-      const d = I18N[lang] || I18N.ko;
-      const pwd = (pwdEl.value || '').trim();
-      if(pwd !== '1234'){
-        alert(d.pwdWrong);
-        pwdEl.value = '';
-        pwdEl.focus();
-        return;
-      }
-      localStorage.removeItem(todayKey());
-      // Also drop pending cloud queue items for today (keeps clear consistent)
-      try{
-        const today = localDateStr(new Date());
-        const p = loadPending();
-        const next = p.filter(x=>x && x.date !== today);
-        savePending(next);
-      }catch(_){ }
-      lastSavedId = null;
-      store.set('qccounter_lastSavedId', lastSavedId);
-      dlgClear.close();
-      renderAll();
-    };
 
     applyLang();
     renderAll();

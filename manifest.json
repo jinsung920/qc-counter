@@ -1,7 +1,7 @@
 {
   "name": "QC Counter (CHOI)",
   "short_name": "QC Counter",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "landscape",
