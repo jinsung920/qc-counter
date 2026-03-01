@@ -330,6 +330,39 @@
       .metaFields{ grid-template-columns: 1fr; }
     }
 
+  
+    /* NG Reason modal (with Category + Search + Top5) */
+    #dlgNg .dlgWrap { max-width: min(820px, 94vw); }
+    .ngToolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .ngToolbar select, .ngToolbar input{
+      background:#0a1325; border:1px solid #1f2937; color:var(--text);
+      padding:10px 12px; border-radius:12px; font-size:14px; font-weight:800;
+    }
+    .ngToolbar input{ flex:1 1 260px; min-width: 220px; }
+    .ngToolbar select{ flex:0 0 260px; min-width: 220px; }
+    .ngSectionTitle { margin: 12px 0 8px 0; font-size: 13px; font-weight: 900; color:#cbd5e1; }
+    .ngList { border:1px solid #223046; background:#0a1325; border-radius:14px; padding:10px; max-height: 38vh; overflow:auto; }
+    .ngGroup { margin: 10px 0 6px 0; font-weight: 1000; color:#93c5fd; }
+    .ngItemBtn {
+      width:100%;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:10px 12px; margin: 6px 0;
+      border-radius:12px; border:1px solid #24324a; background:#0c162b; color:var(--text);
+      font-weight:900; cursor:pointer;
+    }
+    .ngItemBtn:hover { border-color:#3a5aa6; }
+    .ngItemSub { font-size:12px; color: var(--muted); font-weight:800; }
+    .ngPillsRow { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .ngAddRow { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+    .ngAddRow input, .ngAddRow select{
+      background:#0a1325; border:1px solid #1f2937; color:var(--text);
+      padding:10px 12px; border-radius:12px; font-size:14px; font-weight:800;
+    }
+    .ngAddRow input{ flex: 1 1 280px; min-width: 220px; }
+    .ngAddRow select{ flex: 0 0 260px; min-width: 220px; }
+    #ngReasonLine { display:none; margin-top:6px; }
+    .chipStrong { font-weight: 900; }
+
   </style>
 </head>
 <body>
@@ -406,7 +439,8 @@
           <div>
             <div class="hint" data-i18n="hint">절차: 판정 선택(OK/NG) → <span class="kbd">Check</span> → (필요 시 Undo)</div>
             <div class="hint" data-i18n="privacyHint">※ 현장 화면에는 시간별 상세 기록을 표시하지 않습니다. (관리자는 내보내기 파일에서 확인)</div>
-          </div>
+                      <div class="hint" id="ngReasonLine"><span class="chip ngT"><span data-i18n="ngReasonLabel">NG 사유</span>: <span class="chipStrong" id="ngReasonText">-</span></span></div>
+</div>
           <div class="stateBadge" id="currentState"><span class="state-none" data-i18n="stateNone">미선택</span></div>
         </div>
       </section>
@@ -486,6 +520,39 @@
       </div>
     </div>
   </dialog>
+
+
+  <!-- NG Reason select dialog -->
+  <dialog id="dlgNg">
+    <div class="dlgWrap">
+      <div class="dlgTitle" data-i18n="ngSelectTitle">NG 사유 선택</div>
+      <p class="dlgMsg" data-i18n="ngSelectMsg">NG 사유를 선택하세요. 없으면 아래에서 추가할 수 있습니다.</p>
+
+      <div class="ngToolbar">
+        <select id="ngCatFilter"></select>
+        <input id="ngSearch" type="text" placeholder="Search" />
+      </div>
+
+      <div class="ngSectionTitle" data-i18n="ngRecentTitle">최근 사용 (Top 5)</div>
+      <div class="ngPillsRow" id="ngRecentPills"></div>
+
+      <div class="ngSectionTitle" data-i18n="ngAllTitle">전체 목록</div>
+      <div class="ngList" id="ngAllList"></div>
+
+      <div class="ngSectionTitle" data-i18n="ngAddTitle">새 NG 항목 추가</div>
+      <div class="ngAddRow">
+        <input id="ngAddInput" type="text" placeholder="새 NG 항목" />
+        <select id="ngAddCat"></select>
+        <button class="btn" id="ngAddBtn" data-i18n="ngAddBtn">추가</button>
+      </div>
+
+      <div class="dlgBtns" style="margin-top:14px">
+        <button class="btn ghost" id="ngCloseBtn" data-i18n="close">닫기</button>
+      </div>
+    </div>
+  </dialog>
+
+
 
 
   <!-- Cloud Sync (Apps Script) -->
@@ -576,6 +643,21 @@
         cancel: '취소',
         confirm: '확인',
         exportedMsg: '내보내기 완료: 파일이 다운로드(Downloads) 폴더에 저장됩니다.'
+        ,
+        ngReasonLabel: 'NG 사유',
+        ngSelectTitle: 'NG 사유 선택',
+        ngSelectMsg: 'NG 사유를 선택하세요. 없으면 아래에서 추가할 수 있습니다.',
+        ngRecentTitle: '최근 사용 (Top 5)',
+        ngAllTitle: '전체 목록',
+        ngAddTitle: '새 NG 항목 추가',
+        ngSearchPh: '검색',
+        ngAddPh: '새 NG 항목 입력',
+        ngAddBtn: '추가',
+        ngNeedReason: 'NG 사유를 선택해주세요.',
+        ngCatAll: '전체 카테고리',
+        ngAdded: '추가되었습니다.',
+        ngDup: '이미 목록에 있습니다.'
+
       },
       vi: {
 
@@ -609,6 +691,21 @@
         cancel: 'Hủy',
         confirm: 'Xác nhận',
         exportedMsg: 'Xuất xong: file được lưu trong thư mục Tải xuống (Downloads).'
+        ,
+        ngReasonLabel: 'Lý do NG',
+        ngSelectTitle: 'Chọn lý do NG',
+        ngSelectMsg: 'Chọn lý do NG. Nếu không có, bạn có thể thêm mới bên dưới.',
+        ngRecentTitle: 'Dùng gần đây (Top 5)',
+        ngAllTitle: 'Danh sách',
+        ngAddTitle: 'Thêm mục NG mới',
+        ngSearchPh: 'Tìm kiếm',
+        ngAddPh: 'Nhập lý do NG mới',
+        ngAddBtn: 'Thêm',
+        ngNeedReason: 'Vui lòng chọn lý do NG.',
+        ngCatAll: 'Tất cả danh mục',
+        ngAdded: 'Đã thêm.',
+        ngDup: 'Đã tồn tại.'
+
       }
     };
 
@@ -662,6 +759,24 @@
     const btnClearNo = document.getElementById('btnClearNo');
     const pwdEl = document.getElementById('pwd');
 
+
+    // --- NG Reason UI ---
+    const dlgNg = document.getElementById('dlgNg');
+    const ngCatFilterEl = document.getElementById('ngCatFilter');
+    const ngSearchEl = document.getElementById('ngSearch');
+    const ngRecentPillsEl = document.getElementById('ngRecentPills');
+    const ngAllListEl = document.getElementById('ngAllList');
+    const ngAddInputEl = document.getElementById('ngAddInput');
+    const ngAddCatEl = document.getElementById('ngAddCat');
+    const ngAddBtnEl = document.getElementById('ngAddBtn');
+    const ngCloseBtnEl = document.getElementById('ngCloseBtn');
+    const ngReasonLineEl = document.getElementById('ngReasonLine');
+    const ngReasonTextEl = document.getElementById('ngReasonText');
+
+    let ngSelectedKey = '';
+    let ngSelectedItem = null;
+
+
     function applyLang(){
       const d = I18N[lang] || I18N.ko;
       document.querySelectorAll('[data-i18n]').forEach(el=>{
@@ -677,6 +792,7 @@
       try{ if(operatorInput) operatorInput.placeholder = d.operatorPlaceholder || ''; }catch(_){ }
       try{ renderCloudStatus(); }catch(_){ }
       try{ renderDeviceChip(); }catch(_){ }
+      try{ ensureNgCatSelectOptions(); renderNgRecentPills(); renderNgDialogLists(); renderNgReasonLine(); }catch(_){ }
     }
 
 
@@ -755,6 +871,354 @@ function getDeviceSecret(){
 
 renderDeviceChip();
 
+
+// ------------------------------------------------------------
+// NG Catalog (Category + Trilingual: vi/en/ko)
+// - Display: KO/VI follows UI language
+// - Search: matches vi/en/ko
+// - Custom add: stored in localStorage
+// ------------------------------------------------------------
+const NG_CUSTOM_KEY = 'qccounter_ng_custom_items_v1';
+const NG_RECENT_KEY = 'qccounter_ng_recent_v1';
+
+const NG_CATEGORIES = [
+  { id:'C1', vi:'Trầy xước & Hư hỏng', en:'Scratch & Damage', ko:'흠집 및 파손' },
+  { id:'C2', vi:'Vết bẩn & Keo',        en:'Stain & Glue',     ko:'오염 및 접착제' },
+  { id:'C3', vi:'Lắp ráp & Căn chỉnh',  en:'Assembly & Alignment', ko:'조립 및 정렬' },
+  { id:'C4', vi:'Linh kiện & Màu sắc',  en:'Parts & Color',    ko:'부품 및 색상' },
+  { id:'C5', vi:'May mặc & Hoàn thiện', en:'Sewing & Finishing', ko:'봉제 및 마감' },
+];
+
+const NG_ITEMS_DEFAULT = [
+  // C1
+  { id:'C1_SCRATCH', cat:'C1', vi:'Trầy xước', en:'Scratch', ko:'스크래치' },
+  { id:'C1_STRAP_SCRATCH', cat:'C1', vi:'Trầy dây', en:'Strap scratch', ko:'끈 스크래치' },
+  { id:'C1_PEELING_SCRATCH', cat:'C1', vi:'Trầy lớt', en:'Peeling scratch', ko:'긁힘/까짐' },
+  { id:'C1_RAIL_SCRATCH', cat:'C1', vi:'Trầy máng', en:'Rail scratch', ko:'홈/레일 스크래치' },
+  { id:'C1_WHEEL_SCRATCH', cat:'C1', vi:'Trầy bánh xe', en:'Wheel scratch', ko:'바퀴 스크래치' },
+  { id:'C1_PULL_HANDLE_SCRATCH', cat:'C1', vi:'Trầy tay kéo', en:'Pull handle scratch', ko:'캐리어 핸들 스크래치' },
+  { id:'C1_GRAB_HANDLE_SCRATCH', cat:'C1', vi:'Trầy tay nắm', en:'Grab handle scratch', ko:'손잡이 스크래치' },
+  { id:'C1_DENT', cat:'C1', vi:'Móp / Lõm', en:'Dent', ko:'찌그러짐/함몰' },
+  { id:'C1_CRACK_BREAK', cat:'C1', vi:'Nứt / Vỡ', en:'Crack / Break', ko:'크랙/깨짐' },
+
+  // C2
+  { id:'C2_DIRTY', cat:'C2', vi:'Dơ', en:'Dirty', ko:'오염' },
+  { id:'C2_GLUE_STAIN', cat:'C2', vi:'Vết keo', en:'Glue stain', ko:'접착 자국' },
+  { id:'C2_GLUE_PEELING', cat:'C2', vi:'Keo lớt', en:'Glue peeling', ko:'본드 번짐/까짐' },
+  { id:'C2_RUBBER_GLUE', cat:'C2', vi:'Keo xu', en:'Rubber glue', ko:'고무 본드 자국' },
+  { id:'C2_ZIPPER_GLUE', cat:'C2', vi:'Keo dây keo', en:'Zipper glue', ko:'지퍼 본드 자국' },
+  { id:'C2_PIPING_GLUE', cat:'C2', vi:'Keo dây nổi', en:'Piping glue', ko:'돌출된 봉제선 본드 자국' },
+  { id:'C2_OIL_STAIN', cat:'C2', vi:'Dính dầu', en:'Oil stain', ko:'오일/기름' },
+
+  // C3
+  { id:'C3_MISALIGN', cat:'C3', vi:'Lệch / Sai vị trí', en:'Misalign', ko:'정렬 불량/위치 틀어짐' },
+  { id:'C3_WRONG_HANDLE_POSITION', cat:'C3', vi:'Sai tay cầm', en:'Wrong handle position', ko:'손잡이 위치 오류' },
+  { id:'C3_WRONG_WHEEL_POSITION', cat:'C3', vi:'Sai bánh xe', en:'Wrong wheel position', ko:'바퀴 위치 오류' },
+  { id:'C3_PULL_HANDLE', cat:'C3', vi:'Tay kéo', en:'Pull handle', ko:'캐리어 핸들' },
+  { id:'C3_GRAB_HANDLE', cat:'C3', vi:'Tay nắm', en:'Grab handle', ko:'손잡이' },
+  { id:'C3_GAP', cat:'C3', vi:'Hở / Khe hở', en:'Gap', ko:'틈/간격 불량' },
+  { id:'C3_LOOSE_SCREW', cat:'C3', vi:'Lỏng ốc / Lỏng vít', en:'Loose screw', ko:'체결 불량/나사 풀림' },
+
+  // C4
+  { id:'C4_MISSING_PART', cat:'C4', vi:'Thiếu linh kiện', en:'Missing part', ko:'부품 누락' },
+  { id:'C4_WRONG_PART', cat:'C4', vi:'Sai linh kiện', en:'Wrong part', ko:'부품 오류' },
+  { id:'C4_LOGO_ISSUE', cat:'C4', vi:'Lỗi logo / nhãn', en:'Logo issue', ko:'로고/라벨 불량' },
+  { id:'C4_LABEL_STICKER', cat:'C4', vi:'Tem', en:'Label / Sticker', ko:'라벨/스티커' },
+  { id:'C4_COLOR_MISMATCH', cat:'C4', vi:'Sai màu', en:'Color mismatch', ko:'색상 불일치' },
+
+  // C5
+  { id:'C5_SEWING_BREAK', cat:'C5', vi:'Đứt chỉ', en:'Sewing break', ko:'실 끊김' },
+  { id:'C5_SEWING_SKIP', cat:'C5', vi:'Bỏ mũi / Mũi may lỗi', en:'Sewing skip', ko:'땀 불량' },
+  { id:'C5_WRINKLE', cat:'C5', vi:'Nhăn / Nhíu', en:'Wrinkle', ko:'주름/구김' },
+  { id:'C5_STITCH_PROTRUSION', cat:'C5', vi:'Đường may nổi chỉ', en:'Stitch protrusion', ko:'봉제 실 튀어나옴' },
+  { id:'C5_DROPPED_STITCH', cat:'C5', vi:'Đường may sụp mí', en:'Dropped stitch', ko:'봉제 이탈/밑빠짐' },
+];
+
+function stripDiacritics(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function normalizeSearch(s){
+  return stripDiacritics(String(s||'')).toLowerCase().trim();
+}
+function getKoChoseong(ch){
+  const code = ch.charCodeAt(0);
+  if(code < 0xAC00 || code > 0xD7A3) return '#';
+  const cho = Math.floor((code - 0xAC00) / 588);
+  const CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+  return CHO[cho] || '#';
+}
+function getGroupKeyByLang(label){
+  const s = String(label||'').trim();
+  if(!s) return '#';
+  if(lang === 'ko'){
+    return getKoChoseong(s[0]);
+  }
+  const t = stripDiacritics(s).trim();
+  const c = (t[0]||'').toUpperCase();
+  return (c >= 'A' && c <= 'Z') ? c : '#';
+}
+
+function getNgCustom(){
+  const x = store.get(NG_CUSTOM_KEY, []);
+  return Array.isArray(x) ? x : [];
+}
+function setNgCustom(arr){
+  store.set(NG_CUSTOM_KEY, arr || []);
+}
+function getNgRecent(){
+  const x = store.get(NG_RECENT_KEY, []);
+  return Array.isArray(x) ? x : [];
+}
+function setNgRecent(arr){
+  store.set(NG_RECENT_KEY, arr || []);
+}
+
+function getAllNgItems(){
+  const custom = getNgCustom();
+  // prevent accidental overwrite of default IDs
+  const safeCustom = custom.filter(it => it && it.id && !NG_ITEMS_DEFAULT.some(d=>d.id===it.id));
+  return [...NG_ITEMS_DEFAULT, ...safeCustom];
+}
+function getCatById(id){ return NG_CATEGORIES.find(c=>c.id===id) || null; }
+
+function getNgLabel(item){
+  if(!item) return '';
+  if(lang==='ko') return item.ko || item.vi || item.en || '';
+  return item.vi || item.ko || item.en || '';
+}
+function getNgCatLabel(cat){
+  if(!cat) return '';
+  if(lang==='ko') return cat.ko || cat.vi || cat.en || '';
+  return cat.vi || cat.ko || cat.en || '';
+}
+function itemMatchesQuery(item, q){
+  if(!q) return true;
+  const nq = normalizeSearch(q);
+  const hay = [
+    item.vi, item.en, item.ko,
+    getCatById(item.cat)?.vi, getCatById(item.cat)?.en, getCatById(item.cat)?.ko
+  ].map(normalizeSearch).join(' ');
+  return hay.includes(nq);
+}
+
+function renderNgReasonLine(){
+  const d = I18N[lang] || I18N.ko;
+  if(!ngReasonLineEl || !ngReasonTextEl) return;
+  if(selected !== 'NG'){
+    ngReasonLineEl.style.display = 'none';
+    ngReasonTextEl.textContent = '-';
+    return;
+  }
+  ngReasonLineEl.style.display = 'block';
+  ngReasonTextEl.textContent = ngSelectedItem ? getNgLabel(ngSelectedItem) : (lang==='ko' ? '미선택' : 'Chưa chọn');
+}
+
+function ensureNgCatSelectOptions(){
+  if(!ngCatFilterEl || !ngAddCatEl) return;
+  const d = I18N[lang] || I18N.ko;
+
+  const makeOpts = (sel, includeAll)=> {
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if(includeAll){
+      const oAll = document.createElement('option');
+      oAll.value = 'ALL';
+      oAll.textContent = d.ngCatAll || (lang==='ko'?'전체 카테고리':'Tất cả danh mục');
+      sel.appendChild(oAll);
+    }
+    for(const c of NG_CATEGORIES){
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = getNgCatLabel(c);
+      sel.appendChild(o);
+    }
+    // restore if possible
+    if(prev && Array.from(sel.options).some(o=>o.value===prev)) sel.value = prev;
+    else if(includeAll) sel.value = 'ALL';
+  };
+
+  makeOpts(ngCatFilterEl, true);
+  makeOpts(ngAddCatEl, false);
+}
+
+function openNgDialog(){
+  if(!dlgNg) return;
+  ensureNgCatSelectOptions();
+  // sync placeholders
+  const d = I18N[lang] || I18N.ko;
+  if(ngSearchEl) ngSearchEl.placeholder = d.ngSearchPh || 'Search';
+  if(ngAddInputEl) ngAddInputEl.placeholder = d.ngAddPh || 'Add';
+  // default add category to current filter (if not ALL)
+  try{
+    if(ngCatFilterEl && ngAddCatEl){
+      const v = ngCatFilterEl.value;
+      if(v && v !== 'ALL') ngAddCatEl.value = v;
+    }
+  }catch(_){}
+  renderNgDialogLists();
+  try{
+    if(typeof dlgNg.showModal === 'function'){
+      if(!dlgNg.open) dlgNg.showModal();
+    } else {
+      dlgNg.setAttribute('open','');
+    }
+  }catch(_){
+    dlgNg.setAttribute('open','');
+  }
+}
+
+function closeNgDialog(){
+  if(!dlgNg) return;
+  try{ dlgNg.close(); }catch(_){ dlgNg.removeAttribute('open'); }
+}
+
+function setNgSelected(item){
+  ngSelectedItem = item;
+  ngSelectedKey = item ? item.id : '';
+  // update recent list
+  if(ngSelectedKey){
+    const recent = getNgRecent().filter(k=>k && k !== ngSelectedKey);
+    recent.unshift(ngSelectedKey);
+    setNgRecent(recent.slice(0,5));
+  }
+  renderNgReasonLine();
+  renderNgRecentPills();
+}
+
+function renderNgRecentPills(){
+  if(!ngRecentPillsEl) return;
+  const recent = getNgRecent();
+  const all = getAllNgItems();
+  ngRecentPillsEl.innerHTML = '';
+  const show = recent.map(k=>all.find(it=>it.id===k)).filter(Boolean);
+  if(!show.length){
+    const span = document.createElement('div');
+    span.className = 'muted';
+    span.style.fontSize = '12px';
+    span.textContent = lang==='ko' ? '최근 사용 없음' : 'Chưa có';
+    ngRecentPillsEl.appendChild(span);
+    return;
+  }
+  for(const it of show){
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.style.padding = '8px 10px';
+    b.style.borderRadius = '999px';
+    b.textContent = getNgLabel(it);
+    b.onclick = ()=>{ setNgSelected(it); closeNgDialog(); setSelected('NG', {skipOpen:true}); };
+    ngRecentPillsEl.appendChild(b);
+  }
+}
+
+function renderNgDialogLists(){
+  if(!ngAllListEl) return;
+  const all = getAllNgItems();
+
+  const cat = (ngCatFilterEl?.value || 'ALL');
+  const q = (ngSearchEl?.value || '').trim();
+
+  const filtered = all.filter(it => (cat==='ALL' || it.cat === cat) && itemMatchesQuery(it, q));
+
+  // sort by displayed label
+  filtered.sort((a,b)=> getNgLabel(a).localeCompare(getNgLabel(b), lang==='ko'?'ko-KR':'vi-VN'));
+
+  // group
+  const groups = new Map();
+  for(const it of filtered){
+    const gk = getGroupKeyByLang(getNgLabel(it));
+    if(!groups.has(gk)) groups.set(gk, []);
+    groups.get(gk).push(it);
+  }
+
+  const orderedKeys = Array.from(groups.keys()).sort((a,b)=>{
+    if(a==='#') return 1;
+    if(b==='#') return -1;
+    return a.localeCompare(b, lang==='ko'?'ko-KR':'vi-VN');
+  });
+
+  ngAllListEl.innerHTML = '';
+  if(!filtered.length){
+    const div = document.createElement('div');
+    div.className = 'muted';
+    div.style.fontSize = '12px';
+    div.textContent = lang==='ko' ? '검색 결과 없음' : 'Không tìm thấy';
+    ngAllListEl.appendChild(div);
+    renderNgRecentPills();
+    return;
+  }
+
+  for(const gk of orderedKeys){
+    const h = document.createElement('div');
+    h.className = 'ngGroup';
+    h.textContent = gk;
+    ngAllListEl.appendChild(h);
+
+    for(const it of groups.get(gk)){
+      const btn = document.createElement('button');
+      btn.className = 'ngItemBtn';
+      const catObj = getCatById(it.cat);
+      btn.innerHTML = `<div>${escapeHtml(getNgLabel(it))}</div><div class="ngItemSub">${escapeHtml(getNgCatLabel(catObj))}</div>`;
+      btn.onclick = ()=>{ setNgSelected(it); closeNgDialog(); setSelected('NG', {skipOpen:true}); };
+      ngAllListEl.appendChild(btn);
+    }
+  }
+  renderNgRecentPills();
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+}
+
+function addCustomNgItem(){
+  const d = I18N[lang] || I18N.ko;
+  const text = (ngAddInputEl?.value || '').trim();
+  const cat = (ngAddCatEl?.value || '').trim();
+  if(!text || !cat) return;
+
+  const all = getAllNgItems();
+  const exists = all.some(it => normalizeSearch(it.ko)===normalizeSearch(text) || normalizeSearch(it.vi)===normalizeSearch(text) || normalizeSearch(it.en)===normalizeSearch(text));
+  if(exists){
+    alert(d.ngDup || 'Already exists');
+    return;
+  }
+
+  const id = `CUS_${Date.now()}_${Math.random().toString(16).slice(2,6)}`;
+  // store input text into current language field, copy to others (minimal)
+  const item = { id, cat, vi: text, en: text, ko: text, custom:true };
+
+  const cur = getNgCustom();
+  cur.push(item);
+  setNgCustom(cur);
+
+  ngAddInputEl.value = '';
+  // set filter to its category for easier selection
+  try{
+    if(ngCatFilterEl) ngCatFilterEl.value = cat;
+  }catch(_){}
+  alert(d.ngAdded || 'Added');
+  renderNgDialogLists();
+}
+
+function initNgUi(){
+  ensureNgCatSelectOptions();
+  renderNgRecentPills();
+  renderNgDialogLists();
+  renderNgReasonLine();
+
+  if(ngCatFilterEl) ngCatFilterEl.addEventListener('change', ()=>{
+    // align add category
+    try{
+      const v = ngCatFilterEl.value;
+      if(v && v !== 'ALL' && ngAddCatEl) ngAddCatEl.value = v;
+    }catch(_){}
+    renderNgDialogLists();
+  });
+  if(ngSearchEl) ngSearchEl.addEventListener('input', ()=> renderNgDialogLists());
+  if(ngAddBtnEl) ngAddBtnEl.addEventListener('click', ()=> addCustomNgItem());
+  if(ngCloseBtnEl) ngCloseBtnEl.addEventListener('click', ()=> closeNgDialog());
+}
+
+
 // ------------------------------------------------------------
 // Core App Logic
 // ------------------------------------------------------------
@@ -792,12 +1256,23 @@ if(btnSettingsSave){
 btnOK.onclick = ()=> setSelected('OK');
 btnNG.onclick = ()=> setSelected('NG');
 
-function setSelected(v){
+function setSelected(v, opts={}){
   selected = v;
-  currentState.innerHTML = v === 'OK'
-    ? '<span class="state-ok">OK</span>'
-    : '<span class="state-ng">NG</span>';
+  if(v === 'OK'){
+    // clear NG selection
+    ngSelectedKey = '';
+    ngSelectedItem = null;
+    currentState.innerHTML = '<span class="state-ok">OK</span>';
+  } else {
+    currentState.innerHTML = '<span class="state-ng">NG</span>';
+    // open NG dialog unless explicitly skipped
+    if(!opts.skipOpen){
+      openNgDialog();
+    }
+  }
+  renderNgReasonLine();
 }
+
 
 function getRows(){ return store.get(todayKey(), []); }
 function setRows(rows){ store.set(todayKey(), rows); }
@@ -809,7 +1284,19 @@ function saveRecord(final){
   const id = `${date}T${time}.${now.getMilliseconds()}_${Math.random().toString(16).slice(2,8)}`;
   const operator = (operatorInput?.value || '').trim();
   const location = (locationSelect?.value || '').trim();
-  const row = { id, date, time, final, operator, location, deviceId };
+  let ngKey='', ngCategoryId='', ngCategoryKo='', ngCategoryVi='', ngCategoryEn='', ngReasonKo='', ngReasonVi='', ngReasonEn='';
+  if(final==='NG' && ngSelectedItem){
+    ngKey = ngSelectedItem.id;
+    ngCategoryId = ngSelectedItem.cat || '';
+    const catObj = getCatById(ngCategoryId);
+    ngCategoryKo = catObj?.ko || '';
+    ngCategoryVi = catObj?.vi || '';
+    ngCategoryEn = catObj?.en || '';
+    ngReasonKo = ngSelectedItem.ko || '';
+    ngReasonVi = ngSelectedItem.vi || '';
+    ngReasonEn = ngSelectedItem.en || '';
+  }
+  const row = { id, date, time, final, operator, location, deviceId, ngKey, ngCategoryId, ngCategoryKo, ngCategoryVi, ngCategoryEn, ngReasonKo, ngReasonVi, ngReasonEn };
   const rows = getRows();
   rows.push(row);
   setRows(rows);
@@ -881,8 +1368,8 @@ btnExport.onclick = ()=>{
     ...hours.map(h=>[`${String(h.h).padStart(2,'0')}:00`, String(h.total), String(h.ok), String(h.ng)])
   ];
   const detailRows = [
-    ['date','time','operator','location','result','deviceId'],
-    ...rows.map(r=>[r.date, r.time, r.operator||'', r.location||'', r.final, r.deviceId||''])
+    ['date','time','operator','location','result','deviceId','ngCategory_vi','ngReason_vi','ngCategory_ko','ngReason_ko','ngReason_en'],
+...rows.map(r=>[r.date, r.time, r.operator||'', r.location||'', r.final, r.deviceId||'', r.ngCategoryVi||'', r.ngReasonVi||'', r.ngCategoryKo||'', r.ngReasonKo||'', r.ngReasonEn||''])
   ];
 
   downloadBlob(new Blob([rowsToCsv(summaryRows)], {type:'text/csv;charset=utf-8'}), `QCCount_${deviceId}_${date}_Summary.csv`);
@@ -901,11 +1388,18 @@ btnCheck.onclick = async ()=>{
   const loc = (locationSelect?.value || '').trim();
   if(!loc){ alert(d.alertNeedLocation); return; }
 
+  if(selected === 'NG' && !ngSelectedKey){ alert(d.ngNeedReason || 'Please select NG reason'); openNgDialog(); return; }
+
   const row = saveRecord(selected);
+
+  // clear NG selection for safety
+  ngSelectedKey = '';
+  ngSelectedItem = null;
 
   // reset selection
   selected = null;
   currentState.innerHTML = `<span class="state-none">${d.stateNone}</span>`;
+  renderNgReasonLine();
   renderAll();
 
   // cloud sync best-effort
@@ -1003,7 +1497,13 @@ btnClearYes.onclick = ()=>{
         localTime: row.time,
         operator: row.operator || '',
         location: row.location || '',
-        result: row.final
+        result: row.final,
+        ngKey: row.ngKey || '',
+        ngCategory_vi: row.ngCategoryVi || '',
+        ngCategory_ko: row.ngCategoryKo || '',
+        ngReason_vi: row.ngReasonVi || '',
+        ngReason_ko: row.ngReasonKo || '',
+        ngReason_en: row.ngReasonEn || ''
       };
     }
 
@@ -1079,6 +1579,8 @@ btnClearYes.onclick = ()=>{
       if(navigator.onLine) flushPending().catch(()=>{});
     }
 
+
+    initNgUi();
 
     applyLang();
     renderAll();
