@@ -1306,28 +1306,71 @@ function saveRecord(final){
 }
 
 function buildHourAgg(rows){
-  const hours = Array.from({length:24}, (_,i)=>({h:i, total:0, ok:0, ng:0}));
-  let sumT=0, sumO=0, sumN=0;
-  for(const r of rows){
-    const h = parseInt(String(r.time||'00').slice(0,2),10);
-    const obj = hours[h] || hours[0];
-    obj.total += 1; sumT += 1;
-    if(r.final==='OK'){ obj.ok+=1; sumO+=1; } else { obj.ng+=1; sumN+=1; }
+  const hours = [];
+  for(let h = 5; h <= 23; h++){
+    hours.push({
+      h,
+      label: `${String(h).padStart(2,'0')}:30`,
+      total:0,
+      ok:0,
+      ng:0
+    });
   }
+
+  let sumT=0, sumO=0, sumN=0;
+
+  for(const r of rows){
+    const hour = parseInt(r.time.slice(0,2),10);
+    const min = parseInt(r.time.slice(3,5),10);
+
+    let slotHour = hour;
+    if(min < 30) slotHour = hour - 1;
+
+    if(slotHour < 5 || slotHour > 23) continue;
+
+    const obj = hours.find(x => x.h === slotHour);
+    if(!obj) continue;
+
+    obj.total += 1;
+    sumT += 1;
+
+    if(r.final === 'OK'){
+      obj.ok += 1;
+      sumO += 1;
+    } else {
+      obj.ng += 1;
+      sumN += 1;
+    }
+  }
+
   return {hours, sumT, sumO, sumN};
 }
 
 function renderHourStats(){
   const rows = getRows();
   const {hours, sumT, sumO, sumN} = buildHourAgg(rows);
-  sumTotalEl.textContent = sumT; sumOKEl.textContent = sumO; sumNGEl.textContent = sumN;
+
+  sumTotalEl.textContent = sumT;
+  sumOKEl.textContent = sumO;
+  sumNGEl.textContent = sumN;
+
   hourTbody.innerHTML = '';
-  const nowH = new Date().getHours();
+
+  const now = new Date();
+  let currentSlot = now.getHours();
+  if(now.getMinutes() < 30) currentSlot = currentSlot - 1;
+
   for(const obj of hours){
-    const hh = obj.h.toString().padStart(2,'0');
     const tr = document.createElement('tr');
-    const bold = obj.h===nowH ? 'font-weight:900' : '';
-    tr.innerHTML = `<td style="${bold}">${hh}:00</td><td>${obj.total}</td><td class="okT">${obj.ok}</td><td class="ngT">${obj.ng}</td>`;
+    const bold = obj.h === currentSlot ? 'font-weight:900' : '';
+
+    tr.innerHTML = `
+      <td style="${bold}">${obj.label}</td>
+      <td>${obj.total}</td>
+      <td class="okT">${obj.ok}</td>
+      <td class="ngT">${obj.ng}</td>
+    `;
+
     hourTbody.appendChild(tr);
   }
 }
