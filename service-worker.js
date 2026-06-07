@@ -5,7 +5,7 @@
  * 예: v1.0.1 -> v1.0.2
  */
 const CACHE_VERSION = "v1.1.0";
-const CACHE_NAME = `qccounter-${CACHE_VERSION}`;
+const CACHE_NAME = "qc-counter-choi-v2";
 
 /**
  * 오프라인에서도 반드시 필요한 정적 파일 목록
